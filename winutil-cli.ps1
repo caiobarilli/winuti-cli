@@ -14,6 +14,7 @@
     .\winutil-cli.ps1 -Action audit
     .\winutil-cli.ps1 -Action tweaks -Preset standard
     .\winutil-cli.ps1 -Action dns -Provider cloudflare
+    .\winutil-cli.ps1 -Action dns -Provider custom -PrimaryDNS 192.168.15.173 -SecondaryDNS 9.9.9.9
     .\winutil-cli.ps1 -Action debloat
     .\winutil-cli.ps1 -Action performance
     .\winutil-cli.ps1 -Action install -Apps "Git.Git,Microsoft.VSCode"
@@ -29,6 +30,10 @@ param(
     [string]$Preset = 'standard',
 
     [string]$Provider,
+
+    [string]$PrimaryDNS,
+
+    [string]$SecondaryDNS,
 
     [string]$Apps
 )
@@ -192,13 +197,42 @@ function Invoke-ActionDebloat {
 }
 
 # ============================================================
-# ACAO: DNS — troca o DNS via Set-WinUtilDNS (le do dns.json)
+# ACAO: DNS — troca o DNS via Set-WinUtilDNS (le do dns.json).
+# Provider 'custom' usa os IPs informados (-PrimaryDNS / -SecondaryDNS).
 # ============================================================
 function Invoke-ActionDNS {
-    param([string]$Provider)
+    param(
+        [string]$Provider,
+        [string]$PrimaryDNS,
+        [string]$SecondaryDNS
+    )
 
     if (-not $Provider) {
-        Write-Status ERRO "Informe o provedor com -Provider (ex: cloudflare, google, quad9)."
+        Write-Status ERRO "Informe o provedor com -Provider (ex: cloudflare, google, quad9, custom)."
+        return
+    }
+
+    # Provider custom: aplica os IPs informados direto (nao le do dns.json).
+    # IPv6 e opcional e nao e tratado aqui.
+    if ($Provider -eq 'custom') {
+        if (-not $PrimaryDNS) {
+            Write-Status ERRO "Para -Provider custom, informe ao menos -PrimaryDNS."
+            return
+        }
+
+        $servers = @($PrimaryDNS)
+        if ($SecondaryDNS) { $servers += $SecondaryDNS }
+
+        Write-Status INFO "Aplicando DNS custom ($($servers -join ', '))..."
+        try {
+            $adapters = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' }
+            foreach ($adapter in $adapters) {
+                Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ServerAddresses $servers
+            }
+            Write-Status OK "DNS custom aplicado."
+        } catch {
+            Write-Status ERRO $_.Exception.Message
+        }
         return
     }
 
@@ -365,8 +399,14 @@ function Show-Menu {
         }
         '3' { Invoke-ActionDebloat }
         '4' {
-            $prov = Read-Host "Provedor de DNS (ex: cloudflare, google, quad9)"
-            Invoke-ActionDNS -Provider $prov
+            $prov = Read-Host "Provedor de DNS (ex: cloudflare, google, quad9, custom)"
+            if ($prov -eq 'custom') {
+                $p1 = Read-Host "DNS primario (ex: 192.168.15.173)"
+                $p2 = Read-Host "DNS secundario (opcional)"
+                Invoke-ActionDNS -Provider 'custom' -PrimaryDNS $p1 -SecondaryDNS $p2
+            } else {
+                Invoke-ActionDNS -Provider $prov
+            }
         }
         '5' {
             $st = Read-Host "Ultimate Performance (on / off)"
@@ -394,7 +434,7 @@ if ($Action) {
         'audit'       { Invoke-ActionAudit }
         'tweaks'      { Invoke-ActionTweaks -Preset $Preset }
         'debloat'     { Invoke-ActionDebloat }
-        'dns'         { Invoke-ActionDNS -Provider $Provider }
+        'dns'         { Invoke-ActionDNS -Provider $Provider -PrimaryDNS $PrimaryDNS -SecondaryDNS $SecondaryDNS }
         'performance' { Invoke-ActionPerformance -State 'on' }
         'install'     { Invoke-ActionInstall -Apps $Apps }
         'memory'      { Invoke-ActionMemory }

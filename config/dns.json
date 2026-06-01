@@ -46,5 +46,11 @@
         "Secondary": "94.140.15.16",
         "Primary6": "2a10:50c0::bad1:ff",
         "Secondary6": "2a10:50c0::bad2:ff"
+    },
+    "Custom":{
+        "Primary": "",
+        "Secondary": "",
+        "Primary6": "",
+        "Secondary6": ""
     }
 }
