@@ -1,5 +1,3 @@
-# 🖥️ winutil-cli
-
 > Fork do [WinUtil (Chris Titus Tech)](https://github.com/ChrisTitusTech/winutil) sem interface gráfica — PowerShell puro, local ou via SSH.
 
 ```
