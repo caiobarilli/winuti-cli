@@ -21,7 +21,7 @@
 
 [CmdletBinding()]
 param(
-    [ValidateSet('audit', 'tweaks', 'debloat', 'dns', 'performance', 'install')]
+    [ValidateSet('audit', 'tweaks', 'debloat', 'dns', 'performance', 'install', 'memory')]
     [string]$Action,
 
     [ValidateSet('standard', 'minimal', 'advanced')]
@@ -300,6 +300,7 @@ function Show-Menu {
     Write-Host "[4] DNS         - Trocar DNS"
     Write-Host "[5] Performance - Ativar/desativar Ultimate Performance"
     Write-Host "[6] Install     - Instalar apps via winget ou choco"
+    Write-Host "[7] Memory      - Limpar memoria RAM"
     Write-Host "[0] Sair"
     Write-Host ""
 
@@ -332,6 +333,7 @@ function Show-Menu {
             $apps = Read-Host "Apps separados por virgula (ex: Git.Git,Microsoft.VSCode)"
             Invoke-ActionInstall -Apps $apps
         }
+        '7' { Invoke-ActionMemory }
         '0' { return }
         default { Write-Status AVISO "Opcao invalida." }
     }
@@ -348,7 +350,55 @@ if ($Action) {
         'dns'         { Invoke-ActionDNS -Provider $Provider }
         'performance' { Invoke-ActionPerformance -State 'on' }
         'install'     { Invoke-ActionInstall -Apps $Apps }
+        'memory'      { Invoke-ActionMemory }
+        default       { Write-Status ERRO "Acao desconhecida: $Action" }
     }
 } else {
     Show-Menu
+}
+
+# ============================================================
+# ACAO: MEMORY — limpa a RAM via WinMemoryCleaner.exe
+# Baixa o executavel na primeira execucao, se ainda nao existir.
+# ============================================================
+function Invoke-ActionMemory {
+    $toolsDir = Join-Path $root 'tools'
+    $exePath  = Join-Path $toolsDir 'WinMemoryCleaner.exe'
+    $url      = 'https://github.com/IgorMundstein/WinMemoryCleaner/releases/download/3.0.8/WinMemoryCleaner.exe'
+
+    # Garante o executavel
+    if (-not (Test-Path $exePath)) {
+        Write-Status INFO "WinMemoryCleaner.exe nao encontrado. Baixando..."
+        try {
+            if (-not (Test-Path $toolsDir)) {
+                New-Item -ItemType Directory -Path $toolsDir -Force | Out-Null
+            }
+            # TLS 1.2 para o download funcionar no PS 5.1
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            Invoke-WebRequest -Uri $url -OutFile $exePath -UseBasicParsing
+            Write-Status OK "Download concluido."
+        } catch {
+            Write-Status ERRO "Falha no download: $($_.Exception.Message)"
+            return
+        }
+    }
+
+    # RAM livre antes
+    $ramAntes = [math]::Round((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB, 2)
+    Write-Status INFO "RAM livre antes: $ramAntes GB"
+
+    # Limpeza silenciosa (sem GUI)
+    Write-Status INFO "Limpando memoria..."
+    try {
+        $cleanerArgs = '/CombinedPageList', '/ModifiedPageList', '/ProcessesWorkingSet', '/StandbyList', '/SystemWorkingSet'
+        Start-Process -FilePath $exePath -ArgumentList $cleanerArgs -Wait -NoNewWindow
+        Write-Status OK "Limpeza concluida."
+    } catch {
+        Write-Status ERRO "Falha ao executar: $($_.Exception.Message)"
+        return
+    }
+
+    # RAM livre depois
+    $ramDepois = [math]::Round((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB, 2)
+    Write-Status INFO "RAM livre depois: $ramDepois GB"
 }
