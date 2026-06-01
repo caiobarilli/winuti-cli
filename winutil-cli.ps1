@@ -19,11 +19,17 @@
     .\winutil-cli.ps1 -Action performance
     .\winutil-cli.ps1 -Action install -Apps "Git.Git,Microsoft.VSCode"
     .\winutil-cli.ps1 -Action memory
+    .\winutil-cli.ps1 -Action network
+    .\winutil-cli.ps1 -Action network -Interface "Ethernet" -Duration 60
+    .\winutil-cli.ps1 -Action exporter
+    .\winutil-cli.ps1 -Action exporter -SubAction install
+    .\winutil-cli.ps1 -Action exporter -SubAction status
+    .\winutil-cli.ps1 -Action exporter -SubAction metrics
 #>
 
 [CmdletBinding()]
 param(
-    [ValidateSet('audit', 'tweaks', 'debloat', 'dns', 'performance', 'install', 'memory')]
+    [ValidateSet('audit', 'tweaks', 'debloat', 'dns', 'performance', 'install', 'memory', 'network', 'exporter')]
     [string]$Action,
 
     [ValidateSet('standard', 'minimal', 'advanced')]
@@ -35,7 +41,16 @@ param(
 
     [string]$SecondaryDNS,
 
-    [string]$Apps
+    [string]$Apps,
+
+    # Network: interface de captura (ex: "Ethernet", "1")
+    [string]$Interface,
+
+    # Network: duracao da captura em segundos
+    [int]$Duration = 30,
+
+    # Exporter: subacao CLI (install / status / metrics / firewall)
+    [string]$SubAction
 )
 
 # ============================================================
@@ -407,6 +422,305 @@ function Invoke-ActionMemory {
 }
 
 # ============================================================
+# ACAO: NETWORK — captura de pacotes com TShark e relatorio
+# ============================================================
+function Invoke-ActionNetwork {
+    param(
+        [string]$Interface,
+        [int]$Duration = 30
+    )
+
+    # Localiza o executavel do tshark
+    $tsharkCmd = $null
+    $candidatos = @('tshark', 'C:\Program Files\Wireshark\tshark.exe')
+    foreach ($c in $candidatos) {
+        try {
+            $null = & $c --version 2>&1
+            if ($LASTEXITCODE -eq 0) { $tsharkCmd = $c; break }
+        } catch {}
+    }
+
+    # Instala Wireshark via winget se necessario
+    if (-not $tsharkCmd) {
+        Write-Status AVISO "TShark nao encontrado. Instalando Wireshark via winget..."
+        try {
+            winget install WiresharkFoundation.Wireshark --silent --accept-package-agreements
+            Write-Status OK "Wireshark instalado."
+            # Atualiza PATH sem reiniciar o processo
+            $env:PATH = [System.Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' +
+                        [System.Environment]::GetEnvironmentVariable('PATH', 'User')
+        } catch {
+            Write-Status ERRO "Falha ao instalar Wireshark: $($_.Exception.Message)"
+            return
+        }
+        $tsharkCmd = 'C:\Program Files\Wireshark\tshark.exe'
+        if (-not (Test-Path $tsharkCmd)) {
+            Write-Status ERRO "tshark nao localizado apos instalacao. Reinicie o terminal."
+            return
+        }
+    }
+
+    # Lista interfaces disponiveis
+    Write-Status INFO "Interfaces de rede disponiveis:"
+    try {
+        & $tsharkCmd -D 2>&1 | ForEach-Object { Write-Host "  $_" }
+    } catch {
+        Write-Status ERRO "Falha ao listar interfaces: $($_.Exception.Message)"
+        return
+    }
+
+    # Define interface (interativo ou parametro)
+    if (-not $Interface) {
+        $Interface = Read-Host "Informe o nome ou numero da interface para captura"
+    }
+    if (-not $Interface) {
+        Write-Status ERRO "Nenhuma interface informada. Abortando."
+        return
+    }
+
+    # Garante pastas de saida
+    $capturesDir = 'C:\WinUtil\Captures'
+    $reportsDir  = 'C:\WinUtil\Reports'
+    foreach ($d in @($capturesDir, $reportsDir)) {
+        if (-not (Test-Path $d)) {
+            New-Item -ItemType Directory -Path $d -Force | Out-Null
+        }
+    }
+
+    # Nomes com timestamp
+    $ts       = Get-Date -Format 'dd.MM.yyyy_HH.mm.ss'
+    $pcapFile = Join-Path $capturesDir "$ts.pcapng"
+    $rptFile  = Join-Path $reportsDir  "$ts.txt"
+
+    # Captura de pacotes
+    Write-Status INFO "Capturando por $Duration segundo(s) na interface '$Interface'..."
+    Write-Status INFO "Destino: $pcapFile"
+    try {
+        & $tsharkCmd -i $Interface -a "duration:$Duration" -w $pcapFile 2>&1 | Out-Null
+        if (-not (Test-Path $pcapFile)) {
+            Write-Status ERRO "Arquivo de captura nao gerado. Verifique interface e permissoes."
+            return
+        }
+        Write-Status OK "Captura concluida."
+    } catch {
+        Write-Status ERRO "Falha na captura: $($_.Exception.Message)"
+        return
+    }
+
+    # Gera relatorio em TXT
+    Write-Status INFO "Gerando relatorio..."
+    try {
+        $sb = [System.Text.StringBuilder]::new()
+        [void]$sb.AppendLine("=== WinUtil-CLI Network Report ===")
+        [void]$sb.AppendLine("Captura  : $pcapFile")
+        [void]$sb.AppendLine("Data     : $(Get-Date -Format 'dd/MM/yyyy HH:mm:ss')")
+        [void]$sb.AppendLine("Interface: $Interface")
+        [void]$sb.AppendLine("Duracao  : $Duration segundo(s)")
+        [void]$sb.AppendLine("")
+
+        [void]$sb.AppendLine("--- Estatisticas Gerais ---")
+        $stats = & $tsharkCmd -r $pcapFile -qz io,stat,0 2>&1
+        [void]$sb.AppendLine(($stats -join [Environment]::NewLine))
+        [void]$sb.AppendLine("")
+
+        [void]$sb.AppendLine("--- Top 15 IPs de Destino ---")
+        $ips = & $tsharkCmd -r $pcapFile -T fields -e ip.dst 2>&1 |
+               Where-Object { $_ -match '^\d{1,3}\.' }
+        if ($ips) {
+            $ips | Group-Object | Sort-Object Count -Descending | Select-Object -First 15 |
+            ForEach-Object { [void]$sb.AppendLine("  $($_.Count.ToString().PadLeft(6))  $($_.Name)") }
+        } else {
+            [void]$sb.AppendLine("  (nenhum IP capturado)")
+        }
+        [void]$sb.AppendLine("")
+
+        [void]$sb.AppendLine("--- Conversas TCP ---")
+        $conv = & $tsharkCmd -r $pcapFile -qz conv,tcp 2>&1
+        [void]$sb.AppendLine(($conv -join [Environment]::NewLine))
+        [void]$sb.AppendLine("")
+
+        [void]$sb.AppendLine("--- Top Protocolos ---")
+        $phs = & $tsharkCmd -r $pcapFile -qz io,phs 2>&1
+        [void]$sb.AppendLine(($phs -join [Environment]::NewLine))
+
+        $sb.ToString() | Set-Content -Path $rptFile -Encoding UTF8
+        Write-Status OK "Relatorio: $rptFile"
+    } catch {
+        Write-Status ERRO "Falha ao gerar relatorio: $($_.Exception.Message)"
+    }
+
+    # Resumo final no terminal
+    Write-Host ""
+    Write-Host "=== Resumo ===" -ForegroundColor Cyan
+    Write-Host "  Captura  : $pcapFile" -ForegroundColor White
+    Write-Host "  Relatorio: $rptFile"  -ForegroundColor White
+}
+
+# ============================================================
+# ACAO: EXPORTER — instala e gerencia windows_exporter (Prometheus)
+# ============================================================
+function Invoke-ActionExporter {
+    param([string]$SubAction)
+
+    # Garante servico configurado como Automatic e rodando
+    function Start-ExporterService {
+        $svc = Get-Service -Name 'windows_exporter' -ErrorAction SilentlyContinue
+        if (-not $svc) {
+            Write-Status ERRO "Servico windows_exporter nao encontrado apos instalacao."
+            return
+        }
+        try {
+            Set-Service -Name 'windows_exporter' -StartupType Automatic
+            if ($svc.Status -ne 'Running') {
+                Start-Service -Name 'windows_exporter'
+                Write-Status OK "Servico windows_exporter iniciado."
+            } else {
+                Write-Status OK "Servico windows_exporter ja esta rodando."
+            }
+        } catch {
+            Write-Status ERRO "Falha ao gerenciar servico: $($_.Exception.Message)"
+        }
+    }
+
+    function Install-WindowsExporter {
+        $svc = Get-Service -Name 'windows_exporter' -ErrorAction SilentlyContinue
+        if ($svc) {
+            Write-Status INFO "windows_exporter ja instalado (status: $($svc.Status))."
+            Start-ExporterService
+            return
+        }
+
+        $winUtilDir = 'C:\WinUtil'
+        $msiPath    = Join-Path $winUtilDir 'windows_exporter.msi'
+        if (-not (Test-Path $winUtilDir)) {
+            New-Item -ItemType Directory -Path $winUtilDir -Force | Out-Null
+        }
+
+        # Obtem URL do MSI mais recente via GitHub API
+        Write-Status INFO "Consultando release mais recente do windows_exporter..."
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            $apiUrl  = 'https://api.github.com/repos/prometheus-community/windows_exporter/releases/latest'
+            $release = Invoke-RestMethod -Uri $apiUrl -UseBasicParsing
+            $asset   = $release.assets |
+                       Where-Object { $_.name -match 'amd64\.msi$' } |
+                       Select-Object -First 1
+            if (-not $asset) {
+                Write-Status ERRO "MSI amd64 nao encontrado no release mais recente."
+                return
+            }
+            Write-Status INFO "Versao: $($release.tag_name) / $($asset.name)"
+            Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $msiPath -UseBasicParsing
+            Write-Status OK "Download concluido: $msiPath"
+        } catch {
+            Write-Status ERRO "Falha no download: $($_.Exception.Message)"
+            return
+        }
+
+        # Instalacao silenciosa com coletores essenciais
+        Write-Status INFO "Instalando windows_exporter..."
+        try {
+            $collectors = 'cpu,cs,logical_disk,net,os,process,service,hyperv'
+            $proc = Start-Process msiexec `
+                -ArgumentList "/i `"$msiPath`" /quiet ENABLED_COLLECTORS=`"$collectors`"" `
+                -Wait -PassThru
+            if ($proc.ExitCode -ne 0) {
+                Write-Status ERRO "msiexec encerrou com codigo $($proc.ExitCode)."
+                return
+            }
+            Write-Status OK "windows_exporter instalado."
+        } catch {
+            Write-Status ERRO "Falha na instalacao: $($_.Exception.Message)"
+            return
+        }
+
+        Start-ExporterService
+        Show-ExporterMetrics
+        Set-ExporterFirewall
+    }
+
+    function Show-ExporterStatus {
+        $svc = Get-Service -Name 'windows_exporter' -ErrorAction SilentlyContinue
+        if (-not $svc) {
+            Write-Status AVISO "Servico windows_exporter nao encontrado. Execute a subacao 'install'."
+            return
+        }
+        Write-Status INFO "Nome         : $($svc.Name)"
+        Write-Status INFO "Status       : $($svc.Status)"
+        Write-Status INFO "Inicializacao: $($svc.StartType)"
+    }
+
+    function Show-ExporterMetrics {
+        $hostname = $env:COMPUTERNAME
+        $url      = "http://${hostname}:9182/metrics"
+        Write-Status INFO "URL de metricas: $url"
+        try {
+            $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+            Write-Status OK "Porta 9182 acessivel (HTTP $($resp.StatusCode))."
+        } catch {
+            Write-Status AVISO "Porta 9182 nao respondeu: $($_.Exception.Message)"
+        }
+    }
+
+    function Set-ExporterFirewall {
+        $ruleName = 'WinUtil - windows_exporter 9182'
+        $existing = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
+        if ($existing) {
+            Write-Status INFO "Regra de firewall ja existe: '$ruleName'."
+            return
+        }
+        try {
+            New-NetFirewallRule `
+                -DisplayName $ruleName `
+                -Direction Inbound `
+                -Protocol TCP `
+                -LocalPort 9182 `
+                -Action Allow `
+                -Profile Any | Out-Null
+            Write-Status OK "Regra de firewall criada: '$ruleName'."
+        } catch {
+            Write-Status ERRO "Falha ao criar regra de firewall: $($_.Exception.Message)"
+        }
+    }
+
+    # Dispatch CLI via -SubAction
+    if ($SubAction) {
+        switch ($SubAction.ToLower()) {
+            'install'  { Install-WindowsExporter }
+            'status'   { Show-ExporterStatus }
+            'metrics'  { Show-ExporterMetrics }
+            'firewall' { Set-ExporterFirewall }
+            default    {
+                Write-Status ERRO "SubAction desconhecida: '$SubAction'."
+                Write-Status INFO "Opcoes: install, status, metrics, firewall"
+            }
+        }
+        return
+    }
+
+    # Menu interativo do modulo Exporter
+    while ($true) {
+        Write-Host ""
+        Write-Host "[9] Exporter - windows_exporter para Prometheus" -ForegroundColor Cyan
+        Write-Host "  [1] Instalar/verificar windows_exporter"
+        Write-Host "  [2] Ver status do servico"
+        Write-Host "  [3] Ver URL de metricas"
+        Write-Host "  [4] Abrir firewall porta 9182"
+        Write-Host "  [0] Voltar"
+        Write-Host ""
+        $sub = Read-Host "Selecione"
+        switch ($sub) {
+            '1' { Install-WindowsExporter }
+            '2' { Show-ExporterStatus }
+            '3' { Show-ExporterMetrics }
+            '4' { Set-ExporterFirewall }
+            '0' { return }
+            default { Write-Status AVISO "Opcao invalida." }
+        }
+    }
+}
+
+# ============================================================
 # MENU INTERATIVO
 # ============================================================
 function Show-Menu {
@@ -420,6 +734,8 @@ function Show-Menu {
     Write-Host "[5] Performance - Ativar/desativar Ultimate Performance"
     Write-Host "[6] Install     - Instalar apps via winget ou choco"
     Write-Host "[7] Memory      - Limpar memoria RAM"
+    Write-Host "[8] Network     - Captura de pacotes com TShark"
+    Write-Host "[9] Exporter    - Instalar/gerenciar windows_exporter (Prometheus)"
     Write-Host "[0] Sair"
     Write-Host ""
 
@@ -459,6 +775,13 @@ function Show-Menu {
             Invoke-ActionInstall -Apps $apps
         }
         '7' { Invoke-ActionMemory }
+        '8' {
+            $iface = Read-Host "Interface de captura (nome ou numero; Enter para listar e escolher)"
+            $dur   = Read-Host "Duracao em segundos (Enter = 30)"
+            $d     = if ($dur -match '^\d+$') { [int]$dur } else { 30 }
+            Invoke-ActionNetwork -Interface $iface -Duration $d
+        }
+        '9' { Invoke-ActionExporter }
         '0' { return }
         default { Write-Status AVISO "Opcao invalida." }
     }
@@ -476,6 +799,8 @@ if ($Action) {
         'performance' { Invoke-ActionPerformance -State 'on' }
         'install'     { Invoke-ActionInstall -Apps $Apps }
         'memory'      { Invoke-ActionMemory }
+        'network'     { Invoke-ActionNetwork -Interface $Interface -Duration $Duration }
+        'exporter'    { Invoke-ActionExporter -SubAction $SubAction }
         default       { Write-Status ERRO "Acao desconhecida: $Action" }
     }
 } else {
