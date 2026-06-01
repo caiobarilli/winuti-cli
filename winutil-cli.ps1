@@ -14,6 +14,7 @@
     .\winutil-cli.ps1 -Action audit
     .\winutil-cli.ps1 -Action tweaks -Preset standard
     .\winutil-cli.ps1 -Action dns -Provider cloudflare
+    .\winutil-cli.ps1 -Action dns -Provider custom -PrimaryDNS 192.168.15.173 -SecondaryDNS 9.9.9.9
     .\winutil-cli.ps1 -Action debloat
     .\winutil-cli.ps1 -Action performance
     .\winutil-cli.ps1 -Action install -Apps "Git.Git,Microsoft.VSCode"
@@ -215,7 +216,8 @@ function Invoke-ActionDebloat {
 }
 
 # ============================================================
-# ACAO: DNS — troca o DNS via Set-WinUtilDNS (le do dns.json)
+# ACAO: DNS — troca o DNS via Set-WinUtilDNS (le do dns.json).
+# Provider 'custom' usa os IPs informados (-PrimaryDNS / -SecondaryDNS).
 # ============================================================
 function Invoke-ActionDNS {
     param(
@@ -225,27 +227,7 @@ function Invoke-ActionDNS {
     )
 
     if (-not $Provider) {
-        Write-Status ERRO "Informe o provedor com -Provider (ex: cloudflare, google, quad9, custom)."
-        return
-    }
-
-    # Provedor personalizado: requer -PrimaryDNS
-    if ($Provider -eq 'custom') {
-        if (-not $PrimaryDNS) {
-            Write-Status ERRO "Provedor 'custom' requer -PrimaryDNS."
-            return
-        }
-        Write-Status INFO "Aplicando DNS personalizado: $PrimaryDNS / $SecondaryDNS"
-        try {
-            $addresses = @($PrimaryDNS)
-            if ($SecondaryDNS) { $addresses += $SecondaryDNS }
-            Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | ForEach-Object {
-                Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ServerAddresses $addresses
-            }
-            Write-Status OK "DNS personalizado aplicado."
-        } catch {
-            Write-Status ERRO $_.Exception.Message
-        }
+        Write-Status ERRO "Informe o provedor com -Provider (ex: cloudflare, google, quad9)."
         return
     }
 
@@ -455,8 +437,14 @@ function Show-Menu {
         }
         '3' { Invoke-ActionDebloat }
         '4' {
-            $prov = Read-Host "Provedor de DNS (ex: cloudflare, google, quad9)"
-            Invoke-ActionDNS -Provider $prov
+            $prov = Read-Host "Provedor de DNS (ex: cloudflare, google, quad9, custom)"
+            if ($prov -eq 'custom') {
+                $p1 = Read-Host "DNS primario (ex: 192.168.15.173)"
+                $p2 = Read-Host "DNS secundario (opcional)"
+                Invoke-ActionDNS -Provider 'custom' -PrimaryDNS $p1 -SecondaryDNS $p2
+            } else {
+                Invoke-ActionDNS -Provider $prov
+            }
         }
         '5' {
             $st = Read-Host "Ultimate Performance (on / off)"
