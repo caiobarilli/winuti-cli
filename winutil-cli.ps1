@@ -49,7 +49,7 @@ param(
     # Network: duracao da captura em segundos
     [int]$Duration = 30,
 
-    # Exporter: subacao CLI (install / status / metrics / firewall)
+    # Exporter: subacao CLI (install / status / start / stop / metrics / firewall)
     [string]$SubAction
 )
 
@@ -558,35 +558,53 @@ function Invoke-ActionNetwork {
 
 # ============================================================
 # ACAO: EXPORTER — instala e gerencia windows_exporter (Prometheus)
+# Usa Start-Process em vez de servico Windows (falha com "Funcao incorreta" no Win11)
 # ============================================================
 function Invoke-ActionExporter {
     param([string]$SubAction)
 
-    # Garante servico configurado como Automatic e rodando
-    function Start-ExporterService {
-        $svc = Get-Service -Name 'windows_exporter' -ErrorAction SilentlyContinue
-        if (-not $svc) {
-            Write-Status ERRO "Servico windows_exporter nao encontrado apos instalacao."
+    $exePath  = 'C:\Program Files\windows_exporter\windows_exporter.exe'
+    $taskName = 'windows_exporter'
+
+    # Inicia o processo se nao estiver rodando
+    function Start-ExporterProcess {
+        $proc = Get-Process -Name 'windows_exporter' -ErrorAction SilentlyContinue
+        if ($proc) {
+            Write-Status INFO "windows_exporter ja esta rodando (PID: $($proc.Id))."
+            return
+        }
+        if (-not (Test-Path $exePath)) {
+            Write-Status ERRO "Executavel nao encontrado: $exePath. Execute a subacao 'install'."
             return
         }
         try {
-            Set-Service -Name 'windows_exporter' -StartupType Automatic
-            if ($svc.Status -ne 'Running') {
-                Start-Service -Name 'windows_exporter'
-                Write-Status OK "Servico windows_exporter iniciado."
-            } else {
-                Write-Status OK "Servico windows_exporter ja esta rodando."
-            }
+            Start-Process -FilePath $exePath -WindowStyle Hidden
+            Write-Status OK "windows_exporter iniciado via Start-Process."
         } catch {
-            Write-Status ERRO "Falha ao gerenciar servico: $($_.Exception.Message)"
+            Write-Status ERRO "Falha ao iniciar processo: $($_.Exception.Message)"
+        }
+    }
+
+    # Registra tarefa agendada para subir no boot como SYSTEM
+    function Register-ExporterTask {
+        try {
+            $action    = New-ScheduledTaskAction -Execute $exePath
+            $trigger   = New-ScheduledTaskTrigger -AtStartup
+            $settings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit 0 -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+            $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+            Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
+                -Settings $settings -Principal $principal -Force | Out-Null
+            Write-Status OK "Tarefa agendada '$taskName' registrada (boot/SYSTEM)."
+        } catch {
+            Write-Status ERRO "Falha ao registrar tarefa agendada: $($_.Exception.Message)"
         }
     }
 
     function Install-WindowsExporter {
-        $svc = Get-Service -Name 'windows_exporter' -ErrorAction SilentlyContinue
-        if ($svc) {
-            Write-Status INFO "windows_exporter ja instalado (status: $($svc.Status))."
-            Start-ExporterService
+        # Verifica se executavel ja existe
+        if (Test-Path $exePath) {
+            Write-Status INFO "windows_exporter ja instalado em: $exePath"
+            Start-ExporterProcess
             return
         }
 
@@ -621,11 +639,11 @@ function Invoke-ActionExporter {
         Write-Status INFO "Instalando windows_exporter..."
         try {
             $collectors = 'cpu,cs,logical_disk,net,os,process,service,hyperv'
-            $proc = Start-Process msiexec `
+            $install = Start-Process msiexec `
                 -ArgumentList "/i `"$msiPath`" /quiet ENABLED_COLLECTORS=`"$collectors`"" `
                 -Wait -PassThru
-            if ($proc.ExitCode -ne 0) {
-                Write-Status ERRO "msiexec encerrou com codigo $($proc.ExitCode)."
+            if ($install.ExitCode -ne 0) {
+                Write-Status ERRO "msiexec encerrou com codigo $($install.ExitCode)."
                 return
             }
             Write-Status OK "windows_exporter instalado."
@@ -634,20 +652,41 @@ function Invoke-ActionExporter {
             return
         }
 
-        Start-ExporterService
+        Start-ExporterProcess
+        Register-ExporterTask
         Show-ExporterMetrics
         Set-ExporterFirewall
     }
 
-    function Show-ExporterStatus {
-        $svc = Get-Service -Name 'windows_exporter' -ErrorAction SilentlyContinue
-        if (-not $svc) {
-            Write-Status AVISO "Servico windows_exporter nao encontrado. Execute a subacao 'install'."
+    function Stop-ExporterProcess {
+        $proc = Get-Process -Name 'windows_exporter' -ErrorAction SilentlyContinue
+        if (-not $proc) {
+            Write-Status AVISO "windows_exporter nao esta rodando."
             return
         }
-        Write-Status INFO "Nome         : $($svc.Name)"
-        Write-Status INFO "Status       : $($svc.Status)"
-        Write-Status INFO "Inicializacao: $($svc.StartType)"
+        try {
+            Stop-Process -Name 'windows_exporter' -Force
+            Write-Status OK "windows_exporter encerrado."
+        } catch {
+            Write-Status ERRO "Falha ao encerrar processo: $($_.Exception.Message)"
+        }
+    }
+
+    function Show-ExporterStatus {
+        $proc = Get-Process -Name 'windows_exporter' -ErrorAction SilentlyContinue
+        $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+
+        if ($proc) {
+            Write-Status OK    "Processo       : Rodando (PID: $($proc.Id))"
+        } else {
+            Write-Status AVISO "Processo       : Parado"
+        }
+
+        if ($task) {
+            Write-Status INFO "Tarefa agendada: $($task.TaskName) / Estado: $($task.State)"
+        } else {
+            Write-Status AVISO "Tarefa agendada: Nao encontrada. Execute 'install' para registrar."
+        }
     }
 
     function Show-ExporterMetrics {
@@ -688,11 +727,13 @@ function Invoke-ActionExporter {
         switch ($SubAction.ToLower()) {
             'install'  { Install-WindowsExporter }
             'status'   { Show-ExporterStatus }
+            'start'    { Start-ExporterProcess }
+            'stop'     { Stop-ExporterProcess }
             'metrics'  { Show-ExporterMetrics }
             'firewall' { Set-ExporterFirewall }
             default    {
                 Write-Status ERRO "SubAction desconhecida: '$SubAction'."
-                Write-Status INFO "Opcoes: install, status, metrics, firewall"
+                Write-Status INFO "Opcoes: install, status, start, stop, metrics, firewall"
             }
         }
         return
@@ -703,17 +744,21 @@ function Invoke-ActionExporter {
         Write-Host ""
         Write-Host "[9] Exporter - windows_exporter para Prometheus" -ForegroundColor Cyan
         Write-Host "  [1] Instalar/verificar windows_exporter"
-        Write-Host "  [2] Ver status do servico"
-        Write-Host "  [3] Ver URL de metricas"
-        Write-Host "  [4] Abrir firewall porta 9182"
+        Write-Host "  [2] Ver status do processo"
+        Write-Host "  [3] Iniciar processo"
+        Write-Host "  [4] Parar processo"
+        Write-Host "  [5] Ver URL de metricas"
+        Write-Host "  [6] Abrir firewall porta 9182"
         Write-Host "  [0] Voltar"
         Write-Host ""
         $sub = Read-Host "Selecione"
         switch ($sub) {
             '1' { Install-WindowsExporter }
             '2' { Show-ExporterStatus }
-            '3' { Show-ExporterMetrics }
-            '4' { Set-ExporterFirewall }
+            '3' { Start-ExporterProcess }
+            '4' { Stop-ExporterProcess }
+            '5' { Show-ExporterMetrics }
+            '6' { Set-ExporterFirewall }
             '0' { return }
             default { Write-Status AVISO "Opcao invalida." }
         }
