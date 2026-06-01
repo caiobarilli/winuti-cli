@@ -1,3 +1,5 @@
+# 🖥️ winutil-cli
+
 > Fork do [WinUtil (Chris Titus Tech)](https://github.com/ChrisTitusTech/winutil) sem interface gráfica — PowerShell puro, local ou via SSH.
 
 ```
@@ -30,6 +32,7 @@
 - `winutil-cli.ps1` — entry point com menu interativo e suporte a parâmetros CLI
 - `audit/audit.ps1` — auditoria completa do sistema em 8 blocos
 - `tools/WinMemoryCleaner.exe` — baixado automaticamente na primeira execução
+- `pester/winutil-cli.Tests.ps1` — 14 testes Pester 5+ para o entry point
 
 ---
 
@@ -115,8 +118,9 @@ cat C:\log\01.06.2026\06-rede.txt
 ## 🧪 Testes
 
 ```powershell
-Import-Module Pester -MinimumVersion 5.0 -Force
+Import-Module "C:\Program Files\WindowsPowerShell\Modules\Pester\5.7.1\Pester.psd1" -Force
 Invoke-Pester .\pester\configs.Tests.ps1
+Invoke-Pester .\pester\winutil-cli.Tests.ps1
 ```
 
 ---
@@ -131,9 +135,9 @@ Invoke-Pester .\pester\configs.Tests.ps1
 | dns cloudflare | ✅ | Aplicado nos adaptadores ativos |
 | dns custom | ✅ | Suporte a DNS local (ex: AdGuard Home) |
 | memory | ✅ | Download automático + limpeza |
-| performance | ⚠️ | Fix pendente — GUID dinâmico via `powercfg /list` |
-| debloat | ⏭️ | Lista de APPX ainda vazia |
-| install | ⏭️ | Não testado |
+| performance | ✅ | GUID detectado dinamicamente via `powercfg /list` |
+| debloat | ✅ | 22 pacotes APPX definidos |
+| install | ✅ | Testado com Git.Git via winget |
 
 ---
 
@@ -144,10 +148,12 @@ Invoke-Pester .\pester\configs.Tests.ps1
 - [x] DNS via parâmetro com suporte a provider custom
 - [x] Limpeza de RAM via WinMemoryCleaner com download automático
 - [x] Tweaks Standard e Advanced testados
-- [ ] Fix do Performance — detectar GUID dinamicamente via `powercfg /list`
-- [ ] Lista de APPX para debloat
-- [ ] Testes Pester para o entry point
-- [ ] Testar `-Action install`
+- [x] Performance — GUID detectado dinamicamente
+- [x] Debloat — 22 pacotes APPX definidos
+- [x] Testes Pester 14/14 para o entry point
+- [x] Install testado via winget
+- [ ] Testes automatizados no CI/CD (GitHub Actions)
+- [ ] Suporte a `-Action tweaks -Undo` para reverter tweaks
 
 ---
 
