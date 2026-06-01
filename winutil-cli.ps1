@@ -30,6 +30,10 @@ param(
 
     [string]$Provider,
 
+    [string]$PrimaryDNS,
+
+    [string]$SecondaryDNS,
+
     [string]$Apps
 )
 
@@ -169,9 +173,28 @@ function Invoke-ActionTweaks {
 # ============================================================
 function Invoke-ActionDebloat {
     $appxToRemove = @(
-        # TODO: adicionar os nomes dos pacotes APPX, ex:
-        # "Microsoft.Microsoft3DViewer",
-        # "Microsoft.BingWeather"
+        'Microsoft.BingNews'
+        'Microsoft.BingWeather'
+        'Microsoft.BingSearch'
+        'Microsoft.GamingApp'
+        'Microsoft.GetHelp'
+        'Microsoft.Getstarted'
+        'Microsoft.MicrosoftSolitaireCollection'
+        'Microsoft.People'
+        'Microsoft.PowerAutomateDesktop'
+        'Microsoft.Todos'
+        'Microsoft.WindowsFeedbackHub'
+        'Microsoft.WindowsMaps'
+        'Microsoft.XboxApp'
+        'Microsoft.XboxGameOverlay'
+        'Microsoft.XboxGamingOverlay'
+        'Microsoft.XboxIdentityProvider'
+        'Microsoft.XboxSpeechToTextOverlay'
+        'Microsoft.YourPhone'
+        'Microsoft.ZuneMusic'
+        'Microsoft.ZuneVideo'
+        'Clipchamp.Clipchamp'
+        'MicrosoftTeams'
     )
 
     if ($appxToRemove.Count -eq 0) {
@@ -195,10 +218,34 @@ function Invoke-ActionDebloat {
 # ACAO: DNS — troca o DNS via Set-WinUtilDNS (le do dns.json)
 # ============================================================
 function Invoke-ActionDNS {
-    param([string]$Provider)
+    param(
+        [string]$Provider,
+        [string]$PrimaryDNS,
+        [string]$SecondaryDNS
+    )
 
     if (-not $Provider) {
-        Write-Status ERRO "Informe o provedor com -Provider (ex: cloudflare, google, quad9)."
+        Write-Status ERRO "Informe o provedor com -Provider (ex: cloudflare, google, quad9, custom)."
+        return
+    }
+
+    # Provedor personalizado: requer -PrimaryDNS
+    if ($Provider -eq 'custom') {
+        if (-not $PrimaryDNS) {
+            Write-Status ERRO "Provedor 'custom' requer -PrimaryDNS."
+            return
+        }
+        Write-Status INFO "Aplicando DNS personalizado: $PrimaryDNS / $SecondaryDNS"
+        try {
+            $addresses = @($PrimaryDNS)
+            if ($SecondaryDNS) { $addresses += $SecondaryDNS }
+            Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | ForEach-Object {
+                Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ServerAddresses $addresses
+            }
+            Write-Status OK "DNS personalizado aplicado."
+        } catch {
+            Write-Status ERRO $_.Exception.Message
+        }
         return
     }
 
@@ -229,17 +276,60 @@ function Invoke-ActionPerformance {
         [string]$State = 'on'
     )
 
-    # GUIDs oficiais de plano de energia (Microsoft)
-    $ultimateGuid = 'e9a42b02-d5df-448d-aa00-03f14749eb61'
     $balancedGuid = '381b4222-f694-41f0-9685-ff5bb260df2e'
+    $ultimateGuid = 'e9a42b02-d5df-448d-aa00-03f14749eb61'
+    $hiPerfGuid   = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
 
     if ($State -eq 'on') {
-        Write-Status INFO "Ativando Ultimate Performance..."
+        Write-Status INFO "Detectando plano de alto desempenho disponivel..."
+
+        $planOutput = powercfg /list 2>&1
+        $targetGuid = $null
+
+        # Prioridade 1: GUID original do Ultimate Performance ja presente
+        if ($planOutput -match [regex]::Escape($ultimateGuid)) {
+            $targetGuid = $ultimateGuid
+        }
+
+        # Prioridade 2: qualquer plano com "Ultimate" ou "Desempenho Maximo" no nome
+        if (-not $targetGuid) {
+            foreach ($line in $planOutput) {
+                if ($line -match 'Ultimate|Desempenho M.ximo') {
+                    if ($line -match '([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})') {
+                        $targetGuid = $Matches[1]
+                        break
+                    }
+                }
+            }
+        }
+
+        # Tenta adicionar o plano original via duplicatescheme (funciona em Pro/Enterprise)
+        if (-not $targetGuid) {
+            Write-Status INFO "Tentando adicionar Ultimate Performance via duplicatescheme..."
+            powercfg -duplicatescheme $ultimateGuid 2>&1 | Out-Null
+            $planOutput = powercfg /list 2>&1
+            if ($planOutput -match [regex]::Escape($ultimateGuid)) {
+                $targetGuid = $ultimateGuid
+            }
+        }
+
+        # Prioridade 3: Alto desempenho (8c5e7fda)
+        if (-not $targetGuid) {
+            if ($planOutput -match [regex]::Escape($hiPerfGuid)) {
+                $targetGuid = $hiPerfGuid
+            }
+        }
+
+        # Prioridade 4: fallback Balanceado
+        if (-not $targetGuid) {
+            Write-Status AVISO "Nenhum plano de alto desempenho encontrado. Usando Balanceado."
+            $targetGuid = $balancedGuid
+        }
+
+        Write-Status INFO "Ativando: $targetGuid"
         try {
-            # duplica o esquema (adiciona a lista) e ativa
-            powercfg -duplicatescheme $ultimateGuid | Out-Null
-            powercfg -setactive $ultimateGuid
-            Write-Status OK "Ultimate Performance ativado."
+            powercfg -setactive $targetGuid
+            Write-Status OK "Plano de energia ativado."
         } catch {
             Write-Status ERRO $_.Exception.Message
         }
@@ -394,7 +484,7 @@ if ($Action) {
         'audit'       { Invoke-ActionAudit }
         'tweaks'      { Invoke-ActionTweaks -Preset $Preset }
         'debloat'     { Invoke-ActionDebloat }
-        'dns'         { Invoke-ActionDNS -Provider $Provider }
+        'dns'         { Invoke-ActionDNS -Provider $Provider -PrimaryDNS $PrimaryDNS -SecondaryDNS $SecondaryDNS }
         'performance' { Invoke-ActionPerformance -State 'on' }
         'install'     { Invoke-ActionInstall -Apps $Apps }
         'memory'      { Invoke-ActionMemory }

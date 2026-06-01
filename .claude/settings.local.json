@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cd C:\\\\winutil-cli; powershell.exe -NoProfile -Command \"& { cd 'C:\\\\winutil-cli'; .\\\\winutil-cli.ps1 -Action install -Apps 'Git.Git' }\" 2>&1 | Select-Object -First 40)",
+      "PowerShell(winget list *)",
+      "PowerShell(Install-Module -Name Pester -Force -SkipPublisherCheck -Scope CurrentUser -MinimumVersion 5.0.0 2>&1 | Select-Object -Last 5)",
+      "PowerShell(Find-Module *)",
+      "PowerShell(Import-Module Pester -Force; Get-Module Pester | Select-Object Name, Version)",
+      "PowerShell(Test-Path *)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell($env:PSModulePath -split ';')"
+    ]
+  }
+}
