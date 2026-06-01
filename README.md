@@ -28,78 +28,107 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 ---
 
+## ⚙️ Configurando no PATH
+
+Para rodar `winutil` de qualquer lugar no terminal:
+
+```powershell
+# Adiciona o diretório ao PATH permanentemente
+[System.Environment]::SetEnvironmentVariable(
+    "PATH",
+    $env:PATH + ";C:\winutil-cli",
+    [System.EnvironmentVariableTarget]::Machine
+)
+```
+
+Depois adiciona o alias no perfil do PowerShell:
+
+```powershell
+Add-Content $PROFILE "`nSet-Alias winutil 'C:\winutil-cli\winutil-cli.ps1'"
+```
+
+Feche e reabra o terminal. Agora pode usar de qualquer lugar:
+
+```powershell
+winutil
+winutil -Action audit
+winutil -Action memory
+```
+
+---
+
 ## 🧰 Referência de comandos
 
 ### Audit
 ```powershell
-.\winutil-cli.ps1 -Action audit
+winutil -Action audit
 # Logs em C:\log\DD.MM.AAAA\
 ```
 
 ### Tweaks
 ```powershell
-.\winutil-cli.ps1 -Action tweaks -Preset standard   # telemetria, DVR, serviços
-.\winutil-cli.ps1 -Action tweaks -Preset minimal    # só o essencial
-.\winutil-cli.ps1 -Action tweaks -Preset advanced   # + OneDrive, widgets, Copilot
+winutil -Action tweaks -Preset standard   # telemetria, DVR, serviços
+winutil -Action tweaks -Preset minimal    # só o essencial
+winutil -Action tweaks -Preset advanced   # + OneDrive, widgets, Copilot
 ```
 
 ### Debloat
 ```powershell
-.\winutil-cli.ps1 -Action debloat
+winutil -Action debloat
 # Remove 22 pacotes APPX (Xbox, Teams, Bing, Clipchamp...)
 ```
 
 ### DNS
 ```powershell
-.\winutil-cli.ps1 -Action dns -Provider cloudflare
-.\winutil-cli.ps1 -Action dns -Provider google
-.\winutil-cli.ps1 -Action dns -Provider quad9
-.\winutil-cli.ps1 -Action dns -Provider adguard_ads_trackers
-.\winutil-cli.ps1 -Action dns -Provider dhcp                          # volta ao padrão
-.\winutil-cli.ps1 -Action dns -Provider custom -PrimaryDNS 192.168.15.173 -SecondaryDNS 9.9.9.9
+winutil -Action dns -Provider cloudflare
+winutil -Action dns -Provider google
+winutil -Action dns -Provider quad9
+winutil -Action dns -Provider adguard_ads_trackers
+winutil -Action dns -Provider dhcp                                          # volta ao padrão
+winutil -Action dns -Provider custom -PrimaryDNS 192.168.15.173 -SecondaryDNS 9.9.9.9
 ```
 
 ### Performance
 ```powershell
-.\winutil-cli.ps1 -Action performance          # ativa Ultimate Performance
-.\winutil-cli.ps1 -Action performance -State off   # volta ao Balanceado
+winutil -Action performance              # ativa Ultimate Performance
+winutil -Action performance -State off   # volta ao Balanceado
 ```
 
 ### Install
 ```powershell
-.\winutil-cli.ps1 -Action install -Apps "Git.Git"
-.\winutil-cli.ps1 -Action install -Apps "Git.Git,Microsoft.VSCode,Docker.DockerDesktop"
+winutil -Action install -Apps "Git.Git"
+winutil -Action install -Apps "Git.Git,Microsoft.VSCode,Docker.DockerDesktop"
 ```
 
 ### Memory
 ```powershell
-.\winutil-cli.ps1 -Action memory
+winutil -Action memory
 # Baixa WinMemoryCleaner.exe automaticamente na primeira execução
 ```
 
 ### Network (TShark)
 ```powershell
-.\winutil-cli.ps1 -Action network                          # interativo
-.\winutil-cli.ps1 -Action network -Interface "Ethernet" -Duration 60
+winutil -Action network                                    # interativo
+winutil -Action network -Interface "Ethernet" -Duration 60
 # Captura em C:\WinUtil\Captures\ — Relatório em C:\WinUtil\Reports\
 ```
 
 ### Exporter (Prometheus)
 ```powershell
-.\winutil-cli.ps1 -Action exporter -SubAction install    # instala + inicia + tarefa agendada
-.\winutil-cli.ps1 -Action exporter -SubAction status     # processo + tarefa agendada
-.\winutil-cli.ps1 -Action exporter -SubAction start      # inicia o processo
-.\winutil-cli.ps1 -Action exporter -SubAction stop       # para o processo
-.\winutil-cli.ps1 -Action exporter -SubAction metrics    # verifica http://DESKTOP:9182/metrics
-.\winutil-cli.ps1 -Action exporter -SubAction firewall   # abre porta 9182
+winutil -Action exporter -SubAction install    # instala + inicia + tarefa agendada
+winutil -Action exporter -SubAction status     # processo + tarefa agendada
+winutil -Action exporter -SubAction start      # inicia o processo
+winutil -Action exporter -SubAction stop       # para o processo
+winutil -Action exporter -SubAction metrics    # verifica http://DESKTOP:9182/metrics
+winutil -Action exporter -SubAction firewall   # abre porta 9182
 ```
 
 ### Logs — leitura rápida
 ```powershell
-ls C:\log\                                                              # sessões disponíveis
-cat C:\log\01.06.2026\01-sistema.txt                                    # bloco específico
-cat C:\log\01.06.2026\03-processos.txt                                  # top processos
-cat C:\log\01.06.2026\06-rede.txt                                       # conexões ativas
+ls C:\log\                                    # sessões disponíveis
+cat C:\log\01.06.2026\01-sistema.txt          # bloco específico
+cat C:\log\01.06.2026\03-processos.txt        # top processos
+cat C:\log\01.06.2026\06-rede.txt             # conexões ativas
 
 # Ver todos os blocos de uma sessão
 Get-ChildItem C:\log\01.06.2026\ | ForEach-Object {
