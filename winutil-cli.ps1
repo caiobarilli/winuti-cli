@@ -13,6 +13,7 @@
     .\winutil-cli.ps1
     .\winutil-cli.ps1 -Action audit
     .\winutil-cli.ps1 -Action tweaks -Preset standard
+    .\winutil-cli.ps1 -Action tweaks -Preset standard -Undo
     .\winutil-cli.ps1 -Action dns -Provider cloudflare
     .\winutil-cli.ps1 -Action dns -Provider custom -PrimaryDNS 192.168.15.173 -SecondaryDNS 9.9.9.9
     .\winutil-cli.ps1 -Action debloat
@@ -50,7 +51,10 @@ param(
     [int]$Duration = 30,
 
     # Exporter: subacao CLI (install / status / start / stop / metrics / firewall)
-    [string]$SubAction
+    [string]$SubAction,
+
+    # Tweaks: reverte os tweaks para os valores originais
+    [switch]$Undo
 )
 
 # ============================================================
@@ -157,7 +161,10 @@ function Invoke-ActionAudit {
 #       no fluxo CLI (so o cabecalho da funcao foi inspecionado).
 # ============================================================
 function Invoke-ActionTweaks {
-    param([string]$Preset)
+    param(
+        [string]$Preset,
+        [switch]$Undo
+    )
 
     # preset.json usa chaves capitalizadas (Standard / Minimal / Advanced)
     $key = (Get-Culture).TextInfo.ToTitleCase($Preset.ToLower())
@@ -168,16 +175,17 @@ function Invoke-ActionTweaks {
         return
     }
 
-    Write-Status INFO "Aplicando preset '$key' ($($list.Count) tweaks)..."
+    $modo = if ($Undo) { "Revertendo" } else { "Aplicando" }
+    Write-Status INFO "$modo preset '$key' ($($list.Count) tweaks)..."
     foreach ($checkbox in $list) {
         try {
-            Invoke-WinUtilTweaks -CheckBox $checkbox
+            Invoke-WinUtilTweaks -CheckBox $checkbox -undo $Undo.IsPresent
             Write-Status OK $checkbox
         } catch {
             Write-Status ERRO "$checkbox -> $($_.Exception.Message)"
         }
     }
-    Write-Status OK "Preset '$key' aplicado."
+    Write-Status OK "Preset '$key' $($modo.ToLower()) com sucesso."
 }
 
 # ============================================================
@@ -796,7 +804,12 @@ function Show-Menu {
             if ($p -notin @('standard', 'minimal', 'advanced')) {
                 Write-Status ERRO "Preset invalido."
             } else {
-                Invoke-ActionTweaks -Preset $p
+                $undoResp = Read-Host "Undo? (s/n, Enter = n)"
+                if ($undoResp -eq 's') {
+                    Invoke-ActionTweaks -Preset $p -Undo
+                } else {
+                    Invoke-ActionTweaks -Preset $p
+                }
             }
         }
         '3' { Invoke-ActionDebloat }
@@ -841,7 +854,7 @@ function Show-Menu {
 if ($Action) {
     switch ($Action) {
         'audit'       { Invoke-ActionAudit }
-        'tweaks'      { Invoke-ActionTweaks -Preset $Preset }
+        'tweaks'      { Invoke-ActionTweaks -Preset $Preset -Undo:$Undo }
         'debloat'     { Invoke-ActionDebloat }
         'dns'         { Invoke-ActionDNS -Provider $Provider -PrimaryDNS $PrimaryDNS -SecondaryDNS $SecondaryDNS }
         'performance' { Invoke-ActionPerformance -State 'on' }
