@@ -26,8 +26,6 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\winutil-cli.ps1
 ```
 
----
-
 ## ⚙️ Configurando no PATH
 
 Para rodar `winutil` de qualquer lugar no terminal:
@@ -41,13 +39,25 @@ Para rodar `winutil` de qualquer lugar no terminal:
 )
 ```
 
-Depois adiciona o alias no perfil do PowerShell:
+Habilita execução de scripts no perfil do usuário:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
+```
+
+Adiciona o alias no perfil do PowerShell:
 
 ```powershell
 Add-Content $PROFILE "`nSet-Alias winutil 'C:\winutil-cli\winutil-cli.ps1'"
 ```
 
-Feche e reabra o terminal. Agora pode usar de qualquer lugar:
+Recarrega o perfil:
+
+```powershell
+. $PROFILE
+```
+
+Agora pode usar de qualquer lugar:
 
 ```powershell
 winutil
@@ -67,7 +77,8 @@ winutil -Action audit
 
 ### Tweaks
 ```powershell
-winutil -Action tweaks -Preset standard   # telemetria, DVR, serviços
+winutil -Action tweaks -Preset standard         # telemetria, DVR, serviços
+winutil -Action tweaks -Preset standard -Undo  # reverte o preset
 winutil -Action tweaks -Preset minimal    # só o essencial
 winutil -Action tweaks -Preset advanced   # + OneDrive, widgets, Copilot
 ```
@@ -234,6 +245,7 @@ Invoke-Pester .\pester\winutil-cli.Tests.ps1
 | install | ✅ | Testado com Git.Git via winget |
 | network | ✅ | TShark + relatório em `C:\WinUtil\Reports\` |
 | exporter | ✅ | Start-Process + tarefa agendada no boot |
+| tweaks -Undo | ✅ | Reverte tweaks para valores originais |
 
 ---
 
@@ -251,7 +263,7 @@ Invoke-Pester .\pester\winutil-cli.Tests.ps1
 - [x] Network — captura TShark com relatório
 - [x] Exporter — windows_exporter para Prometheus via Start-Process
 - [x] Testes automatizados no CI/CD (GitHub Actions)
-- [ ] Suporte a `-Action tweaks -Undo` para reverter tweaks
+- [x] Suporte a `-Action tweaks -Undo` para reverter tweaks
 
 ---
 
