@@ -25,7 +25,7 @@ function Invoke-Debloat {
     )
 
     if ($appxToRemove.Count -eq 0) {
-        Write-Status AVISO "No packages defined for removal."
+        Write-Status WARNING "No packages defined for removal."
         return
     }
 
@@ -35,7 +35,7 @@ function Invoke-Debloat {
             Remove-WinUtilAPPX -Name $name
             Write-Status OK $name
         } catch {
-            Write-Status ERRO "$name -> $($_.Exception.Message)"
+            Write-Status ERROR "$name -> $($_.Exception.Message)"
         }
     }
     Write-Status OK "Debloat complete."

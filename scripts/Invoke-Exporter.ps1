@@ -11,7 +11,7 @@ function Invoke-Exporter {
             return
         }
         if (-not (Test-Path $exePath)) {
-            Write-Status ERRO "Executable not found: $exePath. Run the 'install' subaction."
+            Write-Status ERROR "Executable not found: $exePath. Run the 'install' subaction."
             return
         }
         try {
@@ -19,7 +19,7 @@ function Invoke-Exporter {
             Start-Process -FilePath $exePath -WindowStyle Hidden
             Write-Status OK "windows_exporter started via Start-Process."
         } catch {
-            Write-Status ERRO "Failed to start process: $($_.Exception.Message)"
+            Write-Status ERROR "Failed to start process: $($_.Exception.Message)"
         }
     }
 
@@ -33,7 +33,7 @@ function Invoke-Exporter {
                 -Settings $settings -Principal $principal -Force | Out-Null
             Write-Status OK "Scheduled task '$taskName' registered (boot/SYSTEM)."
         } catch {
-            Write-Status ERRO "Failed to register scheduled task: $($_.Exception.Message)"
+            Write-Status ERROR "Failed to register scheduled task: $($_.Exception.Message)"
         }
     }
 
@@ -63,14 +63,14 @@ function Invoke-Exporter {
                        Where-Object { $_.name -match 'amd64\.msi$' } |
                        Select-Object -First 1
             if (-not $asset) {
-                Write-Status ERRO "amd64 MSI not found in the latest release."
+                Write-Status ERROR "amd64 MSI not found in the latest release."
                 return
             }
             Write-Status INFO "Version: $($release.tag_name) / $($asset.name)"
             Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $msiPath -UseBasicParsing
             Write-Status OK "Download complete: $msiPath"
         } catch {
-            Write-Status ERRO "Download failed: $($_.Exception.Message)"
+            Write-Status ERROR "Download failed: $($_.Exception.Message)"
             return
         }
 
@@ -81,12 +81,12 @@ function Invoke-Exporter {
                 -ArgumentList "/i `"$msiPath`" /quiet ENABLED_COLLECTORS=`"$collectors`"" `
                 -Wait -PassThru
             if ($install.ExitCode -ne 0) {
-                Write-Status ERRO "msiexec exited with code $($install.ExitCode)."
+                Write-Status ERROR "msiexec exited with code $($install.ExitCode)."
                 return
             }
             Write-Status OK "windows_exporter installed."
         } catch {
-            Write-Status ERRO "Installation failed: $($_.Exception.Message)"
+            Write-Status ERROR "Installation failed: $($_.Exception.Message)"
             return
         }
 
@@ -99,14 +99,14 @@ function Invoke-Exporter {
     function Stop-ExporterProcess {
         $proc = Get-Process -Name 'windows_exporter' -ErrorAction SilentlyContinue
         if (-not $proc) {
-            Write-Status AVISO "windows_exporter is not running."
+            Write-Status WARNING "windows_exporter is not running."
             return
         }
         try {
             Stop-Process -Name 'windows_exporter' -Force
             Write-Status OK "windows_exporter stopped."
         } catch {
-            Write-Status ERRO "Failed to stop process: $($_.Exception.Message)"
+            Write-Status ERROR "Failed to stop process: $($_.Exception.Message)"
         }
     }
 
@@ -117,13 +117,13 @@ function Invoke-Exporter {
         if ($proc) {
             Write-Status OK    "Process        : Running (PID: $($proc.Id))"
         } else {
-            Write-Status AVISO "Process        : Stopped"
+            Write-Status WARNING "Process        : Stopped"
         }
 
         if ($task) {
             Write-Status INFO "Scheduled task : $($task.TaskName) / State: $($task.State)"
         } else {
-            Write-Status AVISO "Scheduled task : Not found. Run 'install' to register."
+            Write-Status WARNING "Scheduled task : Not found. Run 'install' to register."
         }
     }
 
@@ -135,7 +135,7 @@ function Invoke-Exporter {
             $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
             Write-Status OK "Port 9182 accessible (HTTP $($resp.StatusCode))."
         } catch {
-            Write-Status AVISO "Port 9182 did not respond: $($_.Exception.Message)"
+            Write-Status WARNING "Port 9182 did not respond: $($_.Exception.Message)"
         }
     }
 
@@ -156,7 +156,7 @@ function Invoke-Exporter {
                 -Profile Any | Out-Null
             Write-Status OK "Firewall rule created: '$ruleName'."
         } catch {
-            Write-Status ERRO "Failed to create firewall rule: $($_.Exception.Message)"
+            Write-Status ERROR "Failed to create firewall rule: $($_.Exception.Message)"
         }
     }
 
@@ -169,7 +169,7 @@ function Invoke-Exporter {
             'metrics'  { Show-ExporterMetrics }
             'firewall' { Set-ExporterFirewall }
             default    {
-                Write-Status ERRO "Unknown subaction: '$SubAction'."
+                Write-Status ERROR "Unknown subaction: '$SubAction'."
                 Write-Status INFO "Options: install, status, start, stop, metrics, firewall"
             }
         }
@@ -196,7 +196,7 @@ function Invoke-Exporter {
             '5' { Show-ExporterMetrics }
             '6' { Set-ExporterFirewall }
             '0' { return }
-            default { Write-Status AVISO "Invalid option." }
+            default { Write-Status WARNING "Invalid option." }
         }
     }
 }

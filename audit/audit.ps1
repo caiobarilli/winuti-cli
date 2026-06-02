@@ -31,8 +31,8 @@ $isAdmin = ([Security.Principal.WindowsPrincipal] `
 ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 if (-not $isAdmin) {
-    Write-Host "[ AVISO ] No Administrator privileges." -ForegroundColor Yellow
-    Write-Host "          Network and task blocks may be incomplete." -ForegroundColor Yellow
+    Write-Host "[ WARNING ] No Administrator privileges." -ForegroundColor Yellow
+    Write-Host "            Network and task blocks may be incomplete." -ForegroundColor Yellow
     Write-Host ""
 }
 

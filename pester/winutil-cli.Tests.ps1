@@ -4,7 +4,7 @@
     Pester 5+ tests for winutil-cli.ps1
 .DESCRIPTION
     Covers sanity checks, parameter validation and mock-based execution.
-    Output saved to C:\log\DD.MM.AAAA\pester-winutil-cli.txt
+    Output saved to C:\log\DD.MM.YYYY\pester-winutil-cli.txt
 #>
 
 BeforeAll {
@@ -113,19 +113,19 @@ Describe "Sanity" {
 Describe "Parameter Validation" {
 
     # 6>&1 redirects the Information stream (Write-Host PS 5+) to the pipeline
-    It "-Action dns without -Provider returns [ ERRO ]" {
+    It "-Action dns without -Provider returns [ ERROR ]" {
         $output = (Invoke-DNS -Provider '') 6>&1 | Out-String
-        $output | Should -Match '\[ ERRO \]'
+        $output | Should -Match '\[ ERROR \]'
     }
 
-    It "-Action install without -Apps returns [ ERRO ]" {
+    It "-Action install without -Apps returns [ ERROR ]" {
         $output = (Invoke-Install -Apps '') 6>&1 | Out-String
-        $output | Should -Match '\[ ERRO \]'
+        $output | Should -Match '\[ ERROR \]'
     }
 
-    It "-Action dns -Provider custom without -PrimaryDNS returns [ ERRO ]" {
+    It "-Action dns -Provider custom without -PrimaryDNS returns [ ERROR ]" {
         $output = (Invoke-DNS -Provider 'custom' -PrimaryDNS '') 6>&1 | Out-String
-        $output | Should -Match '\[ ERRO \]'
+        $output | Should -Match '\[ ERROR \]'
     }
 }
 
@@ -135,7 +135,7 @@ Describe "Parameter Validation" {
 Describe "Execution with Mock" {
 
     Context "-Action audit" {
-        It "generates the 8 audit files in C:\log\DD.MM.AAAA\" {
+        It "generates the 8 audit files in C:\log\DD.MM.YYYY\" {
             Invoke-Audit
             $logDir    = "C:\log\$(Get-Date -Format 'dd.MM.yyyy')"
             $esperados = @(

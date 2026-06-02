@@ -14,7 +14,7 @@ function Invoke-Network {
     }
 
     if (-not $tsharkCmd) {
-        Write-Status AVISO "TShark not found. Installing Wireshark via winget..."
+        Write-Status WARNING "TShark not found. Installing Wireshark via winget..."
         try {
             winget install WiresharkFoundation.Wireshark --silent --accept-package-agreements
             Write-Status OK "Wireshark installed."
@@ -22,12 +22,12 @@ function Invoke-Network {
             $env:PATH = [System.Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' +
                         [System.Environment]::GetEnvironmentVariable('PATH', 'User')
         } catch {
-            Write-Status ERRO "Failed to install Wireshark: $($_.Exception.Message)"
+            Write-Status ERROR "Failed to install Wireshark: $($_.Exception.Message)"
             return
         }
         $tsharkCmd = 'C:\Program Files\Wireshark\tshark.exe'
         if (-not (Test-Path $tsharkCmd)) {
-            Write-Status ERRO "tshark not found after installation. Please restart the terminal."
+            Write-Status ERROR "tshark not found after installation. Please restart the terminal."
             return
         }
     }
@@ -36,7 +36,7 @@ function Invoke-Network {
     try {
         & $tsharkCmd -D 2>&1 | ForEach-Object { Write-Host "  $_" }
     } catch {
-        Write-Status ERRO "Failed to list interfaces: $($_.Exception.Message)"
+        Write-Status ERROR "Failed to list interfaces: $($_.Exception.Message)"
         return
     }
 
@@ -44,7 +44,7 @@ function Invoke-Network {
         $Interface = Read-Host "Enter the interface name or number for capture"
     }
     if (-not $Interface) {
-        Write-Status ERRO "No interface specified. Aborting."
+        Write-Status ERROR "No interface specified. Aborting."
         return
     }
 
@@ -65,12 +65,12 @@ function Invoke-Network {
     try {
         & $tsharkCmd -i $Interface -a "duration:$Duration" -w $pcapFile 2>&1 | Out-Null
         if (-not (Test-Path $pcapFile)) {
-            Write-Status ERRO "Capture file not generated. Check interface and permissions."
+            Write-Status ERROR "Capture file not generated. Check interface and permissions."
             return
         }
         Write-Status OK "Capture complete."
     } catch {
-        Write-Status ERRO "Capture failed: $($_.Exception.Message)"
+        Write-Status ERROR "Capture failed: $($_.Exception.Message)"
         return
     }
 
@@ -112,7 +112,7 @@ function Invoke-Network {
         $sb.ToString() | Set-Content -Path $rptFile -Encoding UTF8
         Write-Status OK "Report: $rptFile"
     } catch {
-        Write-Status ERRO "Failed to generate report: $($_.Exception.Message)"
+        Write-Status ERROR "Failed to generate report: $($_.Exception.Message)"
     }
 
     Write-Host ""

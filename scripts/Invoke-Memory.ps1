@@ -14,7 +14,7 @@ function Invoke-Memory {
             Invoke-WebRequest -Uri $url -OutFile $exePath -UseBasicParsing
             Write-Status OK "Download complete."
         } catch {
-            Write-Status ERRO "Download failed: $($_.Exception.Message)"
+            Write-Status ERROR "Download failed: $($_.Exception.Message)"
             return
         }
     }
@@ -28,7 +28,7 @@ function Invoke-Memory {
         Start-Process -FilePath $exePath -ArgumentList $cleanerArgs -Wait -NoNewWindow
         Write-Status OK "Cleanup complete."
     } catch {
-        Write-Status ERRO "Execution failed: $($_.Exception.Message)"
+        Write-Status ERROR "Execution failed: $($_.Exception.Message)"
         return
     }
 

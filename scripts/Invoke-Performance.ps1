@@ -50,7 +50,7 @@ function Invoke-Performance {
 
         # Priority 4: Balanced fallback
         if (-not $targetGuid) {
-            Write-Status AVISO "No high-performance plan found. Using Balanced."
+            Write-Status WARNING "No high-performance plan found. Using Balanced."
             $targetGuid = $balancedGuid
         }
 
@@ -59,7 +59,7 @@ function Invoke-Performance {
             powercfg -setactive $targetGuid
             Write-Status OK "Power plan activated."
         } catch {
-            Write-Status ERRO $_.Exception.Message
+            Write-Status ERROR $_.Exception.Message
         }
     } else {
         Write-Status INFO "Switching back to the Balanced plan..."
@@ -67,7 +67,7 @@ function Invoke-Performance {
             powercfg -setactive $balancedGuid
             Write-Status OK "Balanced plan activated."
         } catch {
-            Write-Status ERRO $_.Exception.Message
+            Write-Status ERROR $_.Exception.Message
         }
     }
 }

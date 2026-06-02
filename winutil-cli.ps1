@@ -68,15 +68,15 @@ $OutputEncoding             = [System.Text.UTF8Encoding]::new($false)
 # ============================================================
 function Write-Status {
     param(
-        [ValidateSet('OK', 'ERRO', 'AVISO', 'INFO')]
+        [ValidateSet('OK', 'ERROR', 'WARNING', 'INFO')]
         [string]$Level,
         [string]$Message
     )
     $map = @{
-        OK    = @{ Tag = '[ OK ]';    Color = 'Green'  }
-        ERRO  = @{ Tag = '[ ERRO ]';  Color = 'Red'    }
-        AVISO = @{ Tag = '[ AVISO ]'; Color = 'Yellow' }
-        INFO  = @{ Tag = '[ INFO ]';  Color = 'Gray'   }
+        OK      = @{ Tag = '[ OK ]';      Color = 'Green'  }
+        ERROR   = @{ Tag = '[ ERROR ]';   Color = 'Red'    }
+        WARNING = @{ Tag = '[ WARNING ]'; Color = 'Yellow' }
+        INFO    = @{ Tag = '[ INFO ]';    Color = 'Gray'   }
     }
     Write-Host "$($map[$Level].Tag) $Message" -ForegroundColor $map[$Level].Color
 }
@@ -89,7 +89,7 @@ $isAdmin = ([Security.Principal.WindowsPrincipal] `
 ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 if (-not $isAdmin) {
-    Write-Status ERRO "This script must be run as Administrator."
+    Write-Status ERROR "This script must be run as Administrator."
     Write-Status INFO "Open the terminal with 'Run as administrator' and try again."
     exit 1
 }
@@ -106,14 +106,14 @@ $funcDirs = @(
 
 foreach ($dir in $funcDirs) {
     if (-not (Test-Path $dir)) {
-        Write-Status AVISO "Directory not found: $dir"
+        Write-Status WARNING "Directory not found: $dir"
         continue
     }
     Get-ChildItem -Path $dir -Filter '*.ps1' -File | ForEach-Object {
         try {
             . $_.FullName
         } catch {
-            Write-Status ERRO "Failed to load $($_.Name): $($_.Exception.Message)"
+            Write-Status ERROR "Failed to load $($_.Name): $($_.Exception.Message)"
         }
     }
 }
@@ -125,7 +125,7 @@ if (Test-Path $scriptsDir) {
         try {
             . $_.FullName
         } catch {
-            Write-Status ERRO "Failed to load $($_.Name): $($_.Exception.Message)"
+            Write-Status ERROR "Failed to load $($_.Name): $($_.Exception.Message)"
         }
     }
 }
@@ -145,10 +145,10 @@ foreach ($name in 'dns', 'tweaks', 'preset', 'feature', 'applications') {
         try {
             $sync.configs.$name = Get-Content -Path $file -Raw | ConvertFrom-Json
         } catch {
-            Write-Status AVISO "Invalid JSON in $name.json: $($_.Exception.Message)"
+            Write-Status WARNING "Invalid JSON in $name.json: $($_.Exception.Message)"
         }
     } else {
-        Write-Status AVISO "Config not found: $name.json"
+        Write-Status WARNING "Config not found: $name.json"
     }
 }
 
@@ -178,7 +178,7 @@ function Show-Menu {
         '2' {
             $p = Read-Host "Preset (standard / minimal / advanced)"
             if ($p -notin @('standard', 'minimal', 'advanced')) {
-                Write-Status ERRO "Invalid preset."
+                Write-Status ERROR "Invalid preset."
             } else {
                 $undoResp = Read-Host "Undo? (y/n, Enter = n)"
                 if ($undoResp -eq 'y') {
@@ -202,7 +202,7 @@ function Show-Menu {
         '5' {
             $st = Read-Host "Ultimate Performance (on / off)"
             if ($st -notin @('on', 'off')) {
-                Write-Status ERRO "Invalid value. Use 'on' or 'off'."
+                Write-Status ERROR "Invalid value. Use 'on' or 'off'."
             } else {
                 Invoke-Performance -State $st
             }
@@ -220,7 +220,7 @@ function Show-Menu {
         }
         '9' { Invoke-Exporter }
         '0' { return }
-        default { Write-Status AVISO "Invalid option." }
+        default { Write-Status WARNING "Invalid option." }
     }
 }
 
@@ -238,7 +238,7 @@ if ($Action) {
         'memory'      { Invoke-Memory }
         'network'     { Invoke-Network -Interface $Interface -Duration $Duration }
         'exporter'    { Invoke-Exporter -SubAction $SubAction }
-        default       { Write-Status ERRO "Unknown action: $Action" }
+        default       { Write-Status ERROR "Unknown action: $Action" }
     }
 } else {
     Show-Menu

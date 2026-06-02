@@ -9,7 +9,7 @@ function Invoke-Tweaks {
 
     $list = $sync.configs.preset.$key
     if (-not $list) {
-        Write-Status ERRO "Preset '$key' not found in preset.json"
+        Write-Status ERROR "Preset '$key' not found in preset.json"
         return
     }
 
@@ -20,7 +20,7 @@ function Invoke-Tweaks {
             Invoke-WinUtilTweaks -CheckBox $checkbox -undo $Undo.IsPresent
             Write-Status OK $checkbox
         } catch {
-            Write-Status ERRO "$checkbox -> $($_.Exception.Message)"
+            Write-Status ERROR "$checkbox -> $($_.Exception.Message)"
         }
     }
     Write-Status OK "Preset '$key' $($modo.ToLower()) successfully."
