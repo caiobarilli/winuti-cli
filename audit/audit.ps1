@@ -54,7 +54,7 @@ Uptime          : $([math]::Floor($uptime.TotalHours))h $($uptime.Minutes)m $($u
 Last Boot       : $($os.LastBootUpTime)
 Time Zone       : $((Get-TimeZone).DisplayName)
 "@
-Write-Block "01-sistema.txt" "BLOCK 01 - SYSTEM" $content
+Write-Block "01-system.txt" "BLOCK 01 - SYSTEM" $content
 
 # ============================================================
 # BLOCK 02 - HARDWARE
@@ -116,7 +116,7 @@ $procs = Get-Process | Sort-Object WorkingSet64 -Descending | Select-Object -Fir
     }
 
 $content = $procs -join "`n"
-Write-Block "03-processos.txt" "BLOCK 03 - PROCESSES (Top 30 by RAM)" $content
+Write-Block "03-processes.txt" "BLOCK 03 - PROCESSES (Top 30 by RAM)" $content
 
 # ============================================================
 # BLOCK 04 - SERVICES
@@ -127,7 +127,7 @@ $svcs = Get-Service | Where-Object { $_.Status -eq "Running" } | Sort-Object Dis
     }
 
 $content = $svcs -join "`n"
-Write-Block "04-servicos.txt" "BLOCK 04 - RUNNING SERVICES" $content
+Write-Block "04-services.txt" "BLOCK 04 - RUNNING SERVICES" $content
 
 # ============================================================
 # BLOCK 05 - STARTUP
@@ -171,7 +171,7 @@ $($conns -join "`n")
 OPEN PORTS (LISTEN)
 $($ports -join "`n")
 "@
-Write-Block "06-rede.txt" "BLOCK 06 - NETWORK" $content
+Write-Block "06-network.txt" "BLOCK 06 - NETWORK" $content
 
 # ============================================================
 # BLOCK 07 - SCHEDULED TASKS
@@ -183,7 +183,7 @@ $tasks = Get-ScheduledTask | Where-Object { $_.State -eq "Ready" -or $_.State -e
     }
 
 $content = $tasks -join "`n"
-Write-Block "07-tarefas.txt" "BLOCK 07 - SCHEDULED TASKS (Active)" $content
+Write-Block "07-tasks.txt" "BLOCK 07 - SCHEDULED TASKS (Active)" $content
 
 # ============================================================
 # BLOCK 08 - HYPER-V

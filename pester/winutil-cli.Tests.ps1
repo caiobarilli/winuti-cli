@@ -139,9 +139,9 @@ Describe "Execution with Mock" {
             Invoke-Audit
             $logDir    = "C:\log\$(Get-Date -Format 'dd.MM.yyyy')"
             $esperados = @(
-                '01-sistema.txt', '02-hardware.txt', '03-processos.txt',
-                '04-servicos.txt', '05-startup.txt',  '06-rede.txt',
-                '07-tarefas.txt',  '08-hyperv.txt'
+                '01-system.txt', '02-hardware.txt', '03-processes.txt',
+                '04-services.txt', '05-startup.txt',  '06-network.txt',
+                '07-tasks.txt',  '08-hyperv.txt'
             )
             foreach ($f in $esperados) {
                 Test-Path (Join-Path $logDir $f) |
