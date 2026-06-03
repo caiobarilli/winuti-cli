@@ -327,6 +327,48 @@ Describe "Execution with Mock" {
             Should -Invoke -CommandName logoff -Times 1
         }
 
+        It "-Preset kill-rdp logs off a disconnected session with pt-BR state string (Disco)" {
+            Mock Get-Process { [PSCustomObject]@{ Name = 'mock'; SessionId = 99 } }
+            Mock Get-Process { $null } -ParameterFilter { $Name -contains 'rdpclip' }
+            Mock Get-Service { [PSCustomObject]@{ Name = 'mock'; Status = 'Running'; StartType = 'Automatic' } }
+            Mock Set-Service { }
+            Mock Stop-Service { }
+            Mock Stop-Process { }
+            Mock Test-Path { $true }
+            Mock Set-Content { }
+            Mock query {
+                @(
+                    " SESSIONNAME       USERNAME                 ID  STATE   TYPE",
+                    " rdp-tcp#2         caiob                    2  Disco   rdpwd"
+                )
+            }
+            Mock logoff { }
+            $output = (Invoke-Optimize -Preset 'kill-rdp') 6>&1 | Out-String
+            $output | Should -Match 'Found 1 disconnected RDP session'
+            Should -Invoke -CommandName logoff -Times 1
+        }
+
+        It "-Preset kill-rdp logs off a disconnected session with es state string (Descon)" {
+            Mock Get-Process { [PSCustomObject]@{ Name = 'mock'; SessionId = 99 } }
+            Mock Get-Process { $null } -ParameterFilter { $Name -contains 'rdpclip' }
+            Mock Get-Service { [PSCustomObject]@{ Name = 'mock'; Status = 'Running'; StartType = 'Automatic' } }
+            Mock Set-Service { }
+            Mock Stop-Service { }
+            Mock Stop-Process { }
+            Mock Test-Path { $true }
+            Mock Set-Content { }
+            Mock query {
+                @(
+                    " SESSIONNAME       USERNAME                 ID  STATE   TYPE",
+                    " rdp-tcp#5         pedro                    5  Descon  rdpwd"
+                )
+            }
+            Mock logoff { }
+            $output = (Invoke-Optimize -Preset 'kill-rdp') 6>&1 | Out-String
+            $output | Should -Match 'Found 1 disconnected RDP session'
+            Should -Invoke -CommandName logoff -Times 1
+        }
+
         It "-Preset kill-rdp -KeepUser skips the protected user's session (case-insensitive)" {
             Mock Get-Process { [PSCustomObject]@{ Name = 'mock'; SessionId = 99 } }
             Mock Get-Process { $null } -ParameterFilter { $Name -contains 'rdpclip' }

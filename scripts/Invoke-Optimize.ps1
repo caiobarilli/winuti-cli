@@ -64,6 +64,19 @@ function Invoke-Optimize {
                 $currentProc      = Get-Process -Id $PID -ErrorAction SilentlyContinue
                 $currentSessionId = if ($currentProc) { $currentProc.SessionId } else { -1 }
 
+                $disconnectedStates = @(
+                    'Disc',                                                                                                   # en
+                    'Disco',                                                                                                  # pt-BR/PT
+                    'Descon',                                                                                                 # es
+                    "D$([char]0x00E9)co",                                                                                    # fr: Déco
+                    'Getrennt',                                                                                               # de
+                    'Disconn',                                                                                                # it
+                    "$([char]0x5207)$([char]0x65AD)",                                                                        # ja: 切断
+                    "$([char]0x5DF2)$([char]0x65AD)$([char]0x5F00)",                                                         # zh-CN: 已断开
+                    "$([char]0xC5F0)$([char]0xACB0) $([char]0xB04A)$([char]0xAE40)",                                        # ko: 연결 끊김
+                    "$([char]0x041E)$([char]0x0442)$([char]0x043A)$([char]0x043B)"                                          # ru: Откл
+                )
+
                 $rawSessions  = @(query session)
                 $discSessions = [System.Collections.Generic.List[object]]::new()
 
@@ -83,7 +96,7 @@ function Invoke-Optimize {
                         $state = $tokens[$idIdx + 1]
                         $uname = if ($idIdx -ge 1) { $tokens[$idIdx - 1] } else { '' }
 
-                        if ($state -ne 'Disc')           { continue }
+                        if ($state -notmatch ($disconnectedStates -join '|')) { continue }
                         if ($sid  -eq 0)                 { continue }
                         if ($sid  -eq $currentSessionId) { continue }
 
