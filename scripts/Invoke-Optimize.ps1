@@ -12,7 +12,8 @@ function Invoke-Optimize {
     $sshProcesses = @(
         'LogonUI', 'SearchHost', 'StartMenuExperienceHost',
         'ShellExperienceHost', 'ShellHost', 'TextInputHost',
-        'msedgewebview2', 'OfficeClickToRun'
+        'msedgewebview2', 'OfficeClickToRun',
+        'LDSvc', 'WslService', 'cowork-svc'
     )
 
     $killRdpProcesses = @(
@@ -28,6 +29,8 @@ function Invoke-Optimize {
         'SearchHost'       = 'WSearch'
         'TextInputHost'    = 'TextInputManagementService'
         'OfficeClickToRun' = 'ClickToRunSvc'
+        'LDSvc'            = 'LDSvc'
+        'WslService'       = 'WslService'
     }
 
     # ── UNDO ─────────────────────────────────────────────────────────────────

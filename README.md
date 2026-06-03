@@ -168,6 +168,9 @@ Designed for machines that never had an active graphical session. Run once after
 | `ShellHost` | Stop-Process | No backing service |
 | `TextInputHost` | Stop-Service (TextInputManagementService) | Disabled until -Undo |
 | `msedgewebview2` | Stop-Process | No backing service |
+| `LDSvc` | Stop-Service (LDSvc) | Disabled until -Undo |
+| `WslService` | Stop-Service (WslService) | Disabled until -Undo |
+| `cowork-svc` | Stop-Process | No backing service |
 | `OfficeClickToRun` | Stop-Service (ClickToRunSvc) | Disabled until -Undo |
 
 #### kill-rdp preset — for after an RDP session is disconnected

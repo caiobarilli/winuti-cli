@@ -197,11 +197,11 @@ Describe "Execution with Mock" {
             Mock Test-Path { $true }
             Mock Set-Content { }
             Invoke-Optimize -Preset 'ssh'
-            # 3 service-backed: SearchHost, TextInputHost, OfficeClickToRun
-            Should -Invoke -CommandName Set-Service  -Times 3
-            Should -Invoke -CommandName Stop-Service -Times 3
-            # 5 process-only: LogonUI, StartMenuExperienceHost, ShellExperienceHost, ShellHost, msedgewebview2
-            Should -Invoke -CommandName Stop-Process -Times 5
+            # 5 service-backed: SearchHost, TextInputHost, OfficeClickToRun, LDSvc, WslService
+            Should -Invoke -CommandName Set-Service  -Times 5
+            Should -Invoke -CommandName Stop-Service -Times 5
+            # 6 process-only: LogonUI, StartMenuExperienceHost, ShellExperienceHost, ShellHost, msedgewebview2, cowork-svc
+            Should -Invoke -CommandName Stop-Process -Times 6
         }
 
         It "-Kill stops each process in the comma-separated list" {
@@ -220,9 +220,9 @@ Describe "Execution with Mock" {
             Mock Test-Path { $true }
             Mock Set-Content { }
             Invoke-Optimize -Preset 'ssh' -Kill 'notepad'
-            Should -Invoke -CommandName Stop-Service -Times 3
-            # 5 process-only from preset + 1 custom kill
-            Should -Invoke -CommandName Stop-Process -Times 6
+            Should -Invoke -CommandName Stop-Service -Times 5
+            # 6 process-only from preset + 1 custom kill
+            Should -Invoke -CommandName Stop-Process -Times 7
         }
 
         It "not-running process emits [ WARNING ] instead of [ OK ]" {
