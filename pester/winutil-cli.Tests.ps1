@@ -191,22 +191,17 @@ Describe "Execution with Mock" {
         It "-Preset ssh calls Set-Service Disabled and Stop-Service for service-backed, Stop-Process for process-only" {
             Mock Get-Process { [PSCustomObject]@{ Name = 'mock' } }
             Mock Get-Service { [PSCustomObject]@{ Name = 'mock'; Status = 'Running'; StartType = 'Automatic' } }
-            Mock Get-ScheduledTask { [PSCustomObject]@{ State = 'Ready' } }
             Mock Set-Service { }
             Mock Stop-Service { }
             Mock Stop-Process { }
-            Mock Disable-ScheduledTask { }
             Mock Test-Path { $true }
             Mock Set-Content { }
             Invoke-Optimize -Preset 'ssh'
-            # 4 service-backed: SearchHost (WSearch), TextInputHost, OfficeClickToRun, WslService
-            Should -Invoke -CommandName Set-Service          -Times 4
-            Should -Invoke -CommandName Stop-Service         -Times 4
+            # 5 service-backed: SearchHost (WSearch), TextInputHost, OfficeClickToRun, LDSvc (PaceLicenseDServices), WslService
+            Should -Invoke -CommandName Set-Service  -Times 5
+            Should -Invoke -CommandName Stop-Service -Times 5
             # 6 process-only: LogonUI, StartMenuExperienceHost, ShellExperienceHost, ShellHost, msedgewebview2, cowork-svc
-            # + 1 task-backed: LDSvc (disabled via tasks then stopped via Stop-Process)
-            Should -Invoke -CommandName Stop-Process         -Times 7
-            # SpaceAgentTask + SpaceManagerTask disabled for LDSvc
-            Should -Invoke -CommandName Disable-ScheduledTask -Times 2
+            Should -Invoke -CommandName Stop-Process -Times 6
         }
 
         It "-Kill stops each process in the comma-separated list" {
@@ -219,18 +214,16 @@ Describe "Execution with Mock" {
         It "-Preset ssh combined with -Kill stops preset + custom processes" {
             Mock Get-Process { [PSCustomObject]@{ Name = 'mock' } }
             Mock Get-Service { [PSCustomObject]@{ Name = 'mock'; Status = 'Running'; StartType = 'Automatic' } }
-            Mock Get-ScheduledTask { [PSCustomObject]@{ State = 'Ready' } }
             Mock Set-Service { }
             Mock Stop-Service { }
             Mock Stop-Process { }
-            Mock Disable-ScheduledTask { }
             Mock Test-Path { $true }
             Mock Set-Content { }
             Invoke-Optimize -Preset 'ssh' -Kill 'notepad'
-            Should -Invoke -CommandName Stop-Service          -Times 4
-            Should -Invoke -CommandName Disable-ScheduledTask -Times 2
-            # 6 process-only from preset + 1 LDSvc (task-backed, stopped via Stop-Process) + 1 custom kill
-            Should -Invoke -CommandName Stop-Process -Times 8
+            # 5 service-backed from preset + 0 extra = 5
+            Should -Invoke -CommandName Stop-Service -Times 5
+            # 6 process-only from preset + 1 custom kill
+            Should -Invoke -CommandName Stop-Process -Times 7
         }
 
         It "not-running process emits [ WARNING ] instead of [ OK ]" {
@@ -252,18 +245,16 @@ Describe "Execution with Mock" {
             { Invoke-Optimize -Preset 'ssh' } | Should -Not -Throw
         }
 
-        It "-Undo restores services and tasks from state file and deletes it" {
+        It "-Undo restores services from state file and deletes it" {
             Mock Test-Path { $true } -ParameterFilter { $Path -eq 'C:\WinUtil\optimize-state.json' }
-            Mock Get-Content { '{"services":{"WSearch":"Automatic","ClickToRunSvc":"Automatic"},"tasks":["SpaceAgentTask","SpaceManagerTask"]}' }
-            Mock Set-Service          { }
-            Mock Start-Service        { }
-            Mock Enable-ScheduledTask { }
-            Mock Remove-Item          { }
+            Mock Get-Content { '{"services":{"WSearch":"Automatic","ClickToRunSvc":"Automatic"}}' }
+            Mock Set-Service   { }
+            Mock Start-Service { }
+            Mock Remove-Item   { }
             Invoke-Optimize -Undo
-            Should -Invoke -CommandName Set-Service          -Times 2
-            Should -Invoke -CommandName Start-Service        -Times 2
-            Should -Invoke -CommandName Enable-ScheduledTask -Times 2
-            Should -Invoke -CommandName Remove-Item          -Times 1
+            Should -Invoke -CommandName Set-Service   -Times 2
+            Should -Invoke -CommandName Start-Service -Times 2
+            Should -Invoke -CommandName Remove-Item   -Times 1
         }
 
         It "-Undo with missing state file emits [ ERROR ]" {

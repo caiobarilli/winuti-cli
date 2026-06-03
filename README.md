@@ -47,17 +47,6 @@ winutil -Action optimize -Preset kill-rdp -KeepUser "username"
 winutil -Action optimize -Undo
 ```
 
-### 🎮 Gamer / Desktop
-For gaming PCs or workstations where you want to free RAM before a session.
-
-```powershell
-# Kill background clutter before launching a game
-winutil -Action optimize -Kill "SearchHost,StartMenuExperienceHost,msedgewebview2"
-
-# Clean RAM after closing apps
-winutil -Action memory
-```
-
 ### 💼 Developer Workstation
 For devs who need RDP occasionally but want a clean environment most of the time.
 
@@ -70,6 +59,31 @@ winutil -Action optimize -Kill "cowork-svc,WslService"
 
 # Restore when you need everything back
 winutil -Action optimize -Undo
+```
+
+### 🎹 Music Producer / DAW
+For machines used as a DAW with iLok/PACE plugins that also run as a server or homelab.
+
+```powershell
+# Switch to headless/server mode — stops iLok, GUI and background services
+winutil -Action optimize -Preset ssh
+
+# Switch back to DAW mode — restores iLok (PaceLicenseDServices), all services
+winutil -Action optimize -Undo
+```
+
+> **Note:** `-Undo` fully restores `PaceLicenseDServices` (PACE/iLok license service)
+> so Ableton, plugins and MIDI controllers work normally after restore.
+
+### 🎮 Gamer / Desktop
+For gaming PCs or workstations where you want to free RAM before a session.
+
+```powershell
+# Kill background clutter before launching a game
+winutil -Action optimize -Kill "SearchHost,StartMenuExperienceHost,msedgewebview2"
+
+# Clean RAM after closing apps
+winutil -Action memory
 ```
 
 ### ↩️ Restore everything (any profile)
@@ -218,7 +232,7 @@ Designed for machines that never had an active graphical session. Run once after
 | `ShellHost` | Stop-Process | No backing service |
 | `TextInputHost` | Stop-Service (TextInputManagementService) | Disabled until -Undo |
 | `msedgewebview2` | Stop-Process | No backing service |
-| `LDSvc` | Stop-Service (LDSvc) | Disabled until -Undo |
+| `LDSvc` | Stop-Service (PaceLicenseDServices) | PACE/iLok license service — disabled until -Undo |
 | `WslService` | Stop-Service (WslService) | Disabled until -Undo |
 | `cowork-svc` | Stop-Process | No backing service |
 | `OfficeClickToRun` | Stop-Service (ClickToRunSvc) | Disabled until -Undo |

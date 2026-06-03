@@ -29,6 +29,7 @@ function Invoke-Optimize {
         'SearchHost'       = 'WSearch'
         'TextInputHost'    = 'TextInputManagementService'
         'OfficeClickToRun' = 'ClickToRunSvc'
+        'LDSvc'            = 'PaceLicenseDServices'
         'WslService'       = 'WslService'
     }
 
@@ -51,14 +52,6 @@ function Invoke-Optimize {
             }
         }
 
-        $taskNames = @($state.tasks) | Where-Object { $_ }
-        if ($taskNames.Count -gt 0) {
-            foreach ($taskName in $taskNames) {
-                Enable-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue | Out-Null
-            }
-            Write-Status OK "Restored tasks: $($taskNames -join ', ')"
-        }
-
         Remove-Item -Path $stateFile -Force -ErrorAction SilentlyContinue
         Write-Status OK "Optimize undo complete."
         return
@@ -66,14 +59,11 @@ function Invoke-Optimize {
 
     # ── APPLY ─────────────────────────────────────────────────────────────────
     $targets = [System.Collections.Generic.List[string]]::new()
-    $taskMap  = @{}
 
     if ($Preset) {
         switch ($Preset.ToLower()) {
             'ssh' {
                 Write-Status INFO "Preset 'ssh': stopping headless-incompatible processes..."
-                # LDSvc is kept alive by scheduled tasks, not SCM — must disable tasks first.
-                $taskMap = @{ 'LDSvc' = @('SpaceAgentTask','SpaceManagerTask') }
                 foreach ($p in $sshProcesses) { $targets.Add($p) }
             }
             'kill-rdp' {
@@ -174,33 +164,11 @@ function Invoke-Optimize {
 
     $unique     = $targets | Select-Object -Unique
     $savedState = @{}
-    $savedTasks = [System.Collections.Generic.List[string]]::new()
 
     foreach ($proc in $unique) {
-        $procTaskNames = $taskMap[$proc]
-        $svcName       = $serviceMap[$proc]
+        $svcName = $serviceMap[$proc]
 
-        if ($procTaskNames) {
-            # Task-backed process: disable its scheduled tasks before stopping so they
-            # cannot restart it. Only tasks already in Ready state are saved for undo.
-            $disabledTasks = @()
-            foreach ($taskName in $procTaskNames) {
-                $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-                if ($task -and $task.State -eq 'Ready') {
-                    Disable-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue | Out-Null
-                    $disabledTasks += $taskName
-                }
-            }
-            foreach ($t in $disabledTasks) { $savedTasks.Add($t) }
-
-            $running = Get-Process -Name $proc -ErrorAction SilentlyContinue
-            if ($running) {
-                Stop-Process -Name $proc -Force -ErrorAction SilentlyContinue
-                Write-Status OK "Disabled tasks + Stopped: $proc"
-            } else {
-                Write-Status WARNING "Not running: $proc"
-            }
-        } elseif ($svcName) {
+        if ($svcName) {
             $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
             if ($svc -and $svc.Status -eq 'Running') {
                 $savedState[$svcName] = $svc.StartType.ToString()
@@ -221,12 +189,11 @@ function Invoke-Optimize {
         }
     }
 
-    if ($savedState.Count -gt 0 -or $savedTasks.Count -gt 0) {
+    if ($savedState.Count -gt 0) {
         if (-not (Test-Path $stateDir)) {
             New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
         }
         $mergedServices = @{}
-        $mergedTasks    = [System.Collections.Generic.List[string]]::new()
         if (Test-Path $stateFile) {
             $existingRaw = Get-Content -Path $stateFile -Raw -ErrorAction SilentlyContinue
             if ($existingRaw) {
@@ -235,17 +202,11 @@ function Invoke-Optimize {
                     if ($existing.services) {
                         $existing.services.PSObject.Properties | ForEach-Object { $mergedServices[$_.Name] = $_.Value }
                     }
-                    if ($existing.tasks) {
-                        foreach ($t in @($existing.tasks)) {
-                            if ($t -and $t -notin $mergedTasks) { $mergedTasks.Add($t) }
-                        }
-                    }
                 } catch { }
             }
         }
         foreach ($k in $savedState.Keys) { $mergedServices[$k] = $savedState[$k] }
-        foreach ($t in $savedTasks) { if ($t -notin $mergedTasks) { $mergedTasks.Add($t) } }
-        [ordered]@{ services = $mergedServices; tasks = @($mergedTasks) } |
+        [ordered]@{ services = $mergedServices } |
             ConvertTo-Json -Depth 3 | Set-Content -Path $stateFile -Encoding UTF8
     }
 
