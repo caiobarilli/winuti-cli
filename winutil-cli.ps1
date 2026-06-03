@@ -26,15 +26,18 @@
     .\winutil-cli.ps1 -Action exporter -SubAction install
     .\winutil-cli.ps1 -Action exporter -SubAction status
     .\winutil-cli.ps1 -Action exporter -SubAction metrics
+    .\winutil-cli.ps1 -Action optimize -Preset ssh
+    .\winutil-cli.ps1 -Action optimize -Kill "notepad,calc"
+    .\winutil-cli.ps1 -Action optimize -Preset ssh -Kill "notepad,calc"
 #>
 
 [CmdletBinding()]
 param(
-    [ValidateSet('audit', 'tweaks', 'debloat', 'dns', 'performance', 'install', 'memory', 'network', 'exporter', 'processes')]
+    [ValidateSet('audit', 'tweaks', 'debloat', 'dns', 'performance', 'install', 'memory', 'network', 'exporter', 'processes', 'optimize')]
     [string]$Action,
 
-    [ValidateSet('standard', 'minimal', 'advanced')]
-    [string]$Preset = 'standard',
+    [ValidateSet('standard', 'minimal', 'advanced', 'ssh')]
+    [string]$Preset,
 
     [string]$Provider,
 
@@ -54,7 +57,10 @@ param(
     [string]$SubAction,
 
     # Tweaks: reverts tweaks to their original values
-    [switch]$Undo
+    [switch]$Undo,
+
+    # Optimize: comma-separated list of process names to stop
+    [string]$Kill
 )
 
 # ============================================================
@@ -169,6 +175,7 @@ function Show-Menu {
     Write-Host "[8] Network     - Packet capture with TShark"
     Write-Host "[9] Exporter    - Install/manage windows_exporter (Prometheus)"
     Write-Host "[10] Processes  - Show top 30 processes by RAM"
+    Write-Host "[11] Optimize   - Stop processes (preset: ssh, or custom kill list)"
     Write-Host "[0] Exit"
     Write-Host ""
 
@@ -221,6 +228,11 @@ function Show-Menu {
         }
         '9' { Invoke-Exporter }
         '10' { Invoke-Processes }
+        '11' {
+            $p = Read-Host "Preset (ssh / Enter to skip)"
+            $k = Read-Host "Kill list (comma-separated, Enter to skip)"
+            Invoke-Optimize -Preset $p -Kill $k
+        }
         '0' { return }
         default { Write-Status WARNING "Invalid option." }
     }
@@ -232,7 +244,7 @@ function Show-Menu {
 if ($Action) {
     switch ($Action.ToLower()) {
         'audit'       { Invoke-Audit }
-        'tweaks'      { Invoke-Tweaks -Preset $Preset -Undo:$Undo }
+        'tweaks'      { Invoke-Tweaks -Preset $(if ($Preset) { $Preset } else { 'standard' }) -Undo:$Undo }
         'debloat'     { Invoke-Debloat }
         'dns'         { Invoke-DNS -Provider $Provider -PrimaryDNS $PrimaryDNS -SecondaryDNS $SecondaryDNS }
         'performance' { Invoke-Performance }
@@ -241,6 +253,7 @@ if ($Action) {
         'network'     { Invoke-Network -Interface $Interface -Duration $Duration }
         'exporter'    { Invoke-Exporter -SubAction $SubAction }
         'processes'   { Invoke-Processes }
+        'optimize'    { Invoke-Optimize -Preset $Preset -Kill $Kill }
         default       { Write-Status ERROR "Unknown action: $Action" }
     }
 } else {

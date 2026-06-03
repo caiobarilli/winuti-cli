@@ -127,6 +127,16 @@ Describe "Parameter Validation" {
         $output = (Invoke-DNS -Provider 'custom' -PrimaryDNS '') 6>&1 | Out-String
         $output | Should -Match '\[ ERROR \]'
     }
+
+    It "-Action optimize without -Preset or -Kill returns [ ERROR ]" {
+        $output = (Invoke-Optimize) 6>&1 | Out-String
+        $output | Should -Match '\[ ERROR \]'
+    }
+
+    It "-Action optimize with unknown -Preset returns [ ERROR ]" {
+        $output = (Invoke-Optimize -Preset 'invalid') 6>&1 | Out-String
+        $output | Should -Match '\[ ERROR \]'
+    }
 }
 
 # ==============================================================
@@ -174,6 +184,43 @@ Describe "Execution with Mock" {
             $output = Invoke-Processes 6>&1 | Out-String
             $lines = ($output -split "`n") | Where-Object { $_ -match '\S' }
             $lines.Count | Should -BeGreaterOrEqual 30
+        }
+    }
+
+    Context "-Action optimize" {
+        It "-Preset ssh calls Stop-Process for each of the 8 preset processes" {
+            Mock Get-Process { [PSCustomObject]@{ Name = 'mock' } }
+            Mock Stop-Process { }
+            Invoke-Optimize -Preset 'ssh'
+            Should -Invoke -CommandName Stop-Process -Times 8
+        }
+
+        It "-Kill stops each process in the comma-separated list" {
+            Mock Get-Process { [PSCustomObject]@{ Name = 'mock' } }
+            Mock Stop-Process { }
+            Invoke-Optimize -Kill 'notepad,calc'
+            Should -Invoke -CommandName Stop-Process -Times 2
+        }
+
+        It "-Preset ssh combined with -Kill stops preset + custom processes" {
+            Mock Get-Process { [PSCustomObject]@{ Name = 'mock' } }
+            Mock Stop-Process { }
+            Invoke-Optimize -Preset 'ssh' -Kill 'notepad'
+            Should -Invoke -CommandName Stop-Process -Times 9
+        }
+
+        It "not-running process emits [ WARNING ] instead of [ OK ]" {
+            Mock Get-Process { $null }
+            Mock Stop-Process { }
+            $output = (Invoke-Optimize -Kill 'ghostproc') 6>&1 | Out-String
+            $output | Should -Match '\[ WARNING \]'
+            Should -Invoke -CommandName Stop-Process -Times 0
+        }
+
+        It "-Preset ssh does not throw" {
+            Mock Get-Process { $null }
+            Mock Stop-Process { }
+            { Invoke-Optimize -Preset 'ssh' } | Should -Not -Throw
         }
     }
 }
