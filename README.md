@@ -10,6 +10,7 @@
   ╚███╔███╔╝██║██║ ╚████║╚██████╔╝   ██║   ██║███████╗   ╚██████╗███████╗██║
    ╚══╝╚══╝ ╚═╝╚═╝  ╚═══╝ ╚═════╝    ╚═╝   ╚═╝╚══════╝    ╚═════╝╚══════╝╚═╝
 ```
+
 [![Pester Tests](https://github.com/caiobarilli/winutil-cli/actions/workflows/tests.yml/badge.svg)](https://github.com/caiobarilli/winutil-cli/actions/workflows/tests.yml)
 
 ---
@@ -140,6 +141,32 @@ winutil -Action processes
 # Displays top 30 processes by RAM usage
 ```
 
+### Optimize
+```powershell
+winutil -Action optimize -Preset ssh           # stop GUI processes and disable unnecessary services
+winutil -Action optimize -Preset ssh -Undo     # restore original service startup types
+winutil -Action optimize -Kill "proc1,proc2"   # stop a custom list of processes
+winutil -Action optimize -Preset ssh -Kill "notepad,calc"  # preset + custom kill list
+```
+
+> **Note:** The `ssh` preset is designed for headless/SSH-only sessions.
+> It stops GUI-related processes and disables their backing services so they don't restart automatically.
+> State is saved to `C:\WinUtil\optimize-state.json` and fully restored with `-Undo`.
+> For best results, disconnect any active RDP session before running — GUI processes are tied to the graphical session and will restart while it remains open.
+
+#### ssh preset — what gets stopped
+
+| Process | Method | Notes |
+|---|---|---|
+| `LogonUI` | Stop-Process | No backing service |
+| `SearchHost` | Stop-Service (WSearch) | Disabled until -Undo |
+| `StartMenuExperienceHost` | Stop-Process | No backing service |
+| `ShellExperienceHost` | Stop-Process | No backing service |
+| `ShellHost` | Stop-Process | No backing service |
+| `TextInputHost` | Stop-Service (TextInputManagementService) | Disabled until -Undo |
+| `msedgewebview2` | Stop-Process | No backing service |
+| `OfficeClickToRun` | Stop-Service (ClickToRunSvc) | Disabled until -Undo |
+
 ### Logs — quick read
 ```powershell
 ls C:\log\                                      # available sessions
@@ -174,17 +201,18 @@ if ($app) { $app.Uninstall() }
 ```
 winutil-cli
 ===========
-[1] Audit       - Generate full system log
-[2] Tweaks      - Apply tweaks (Standard / Minimal / Advanced)
-[3] Debloat     - Remove unnecessary APPX packages
-[4] DNS         - Change DNS
-[5] Performance - Enable/disable Ultimate Performance
-[6] Install     - Install apps via winget
-[7] Memory      - Clean RAM
-[8] Network     - Packet capture with TShark
-[9] Exporter    - Install/manage windows_exporter (Prometheus)
-[10] Processes  - Show top 30 processes by RAM
-[0] Exit
+[1]  Audit       - Generate full system log
+[2]  Tweaks      - Apply tweaks (Standard / Minimal / Advanced)
+[3]  Debloat     - Remove unnecessary APPX packages
+[4]  DNS         - Change DNS
+[5]  Performance - Enable/disable Ultimate Performance
+[6]  Install     - Install apps via winget
+[7]  Memory      - Clean RAM
+[8]  Network     - Packet capture with TShark
+[9]  Exporter    - Install/manage windows_exporter (Prometheus)
+[10] Processes   - Show top 30 processes by RAM
+[11] Optimize    - Stop GUI processes / restore with -Undo
+[0]  Exit
 ```
 
 ---
@@ -204,7 +232,8 @@ winutil-cli/
 │   ├── Invoke-Memory.ps1
 │   ├── Invoke-Network.ps1
 │   ├── Invoke-Exporter.ps1
-│   └── Invoke-Processes.ps1
+│   ├── Invoke-Processes.ps1
+│   └── Invoke-Optimize.ps1
 ├── audit/
 ├── config/
 ├── functions/
@@ -237,14 +266,15 @@ winutil-cli/
 - `audit/audit.ps1` — full system audit in 8 blocks
 - `tools/WinMemoryCleaner.exe` — downloaded automatically on first run
 - `scripts/Invoke-Processes.ps1` — lists top 30 processes by RAM usage directly in the terminal
-- `pester/winutil-cli.Tests.ps1` — 18 Pester 5+ tests for the entry point
+- `scripts/Invoke-Optimize.ps1` — stops GUI processes and disables services for headless/SSH sessions
+- `pester/winutil-cli.Tests.ps1` — 26 Pester 5+ tests for the entry point
 
 ---
 
 ## 🔍 Audit — generated blocks
 
 | File | Content |
-|------|---------|
+|---|---|
 | `01-system.txt` | hostname, uptime, Windows version |
 | `02-hardware.txt` | CPU, GPU, RAM, disks |
 | `03-processes.txt` | top 30 processes by RAM |
@@ -268,7 +298,7 @@ Invoke-Pester .\pester\ -Output Detailed
 ## 📊 Action status
 
 | Action | Status | Notes |
-|--------|--------|-------|
+|---|---|---|
 | audit | ✅ | 8 log blocks generated |
 | tweaks standard | ✅ | 14 tweaks applied |
 | tweaks advanced | ✅ | 18 tweaks applied |
@@ -282,6 +312,9 @@ Invoke-Pester .\pester\ -Output Detailed
 | exporter | ✅ | Start-Process + scheduled task at boot |
 | tweaks -Undo | ✅ | Reverts tweaks to original values |
 | processes | ✅ | Top 30 processes by RAM displayed in terminal |
+| optimize ssh | ✅ | Stops GUI processes, disables backing services |
+| optimize -Undo | ✅ | Restores original StartupType and restarts services |
+| optimize -Kill | ✅ | Custom comma-separated process kill list |
 
 ---
 
@@ -294,7 +327,7 @@ Invoke-Pester .\pester\ -Output Detailed
 - [x] Tweaks Standard and Advanced tested
 - [x] Performance — GUID detected dynamically
 - [x] Debloat — 22 APPX packages defined
-- [x] Pester 18/18 tests passing
+- [x] Pester 26/26 tests passing
 - [x] Install tested via winget
 - [x] Network — TShark capture with report
 - [x] Exporter — windows_exporter for Prometheus via Start-Process
@@ -302,6 +335,7 @@ Invoke-Pester .\pester\ -Output Detailed
 - [x] `-Action tweaks -Undo` support to revert tweaks
 - [x] Entry point segmented into `scripts/Invoke-*.ps1`
 - [x] Processes — top 30 processes by RAM displayed in terminal
+- [x] Optimize — SSH preset with service disable + `-Undo` restore + custom `-Kill`
 
 ---
 
