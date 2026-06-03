@@ -29,6 +29,7 @@
     .\winutil-cli.ps1 -Action optimize -Preset ssh
     .\winutil-cli.ps1 -Action optimize -Kill "notepad,calc"
     .\winutil-cli.ps1 -Action optimize -Preset ssh -Kill "notepad,calc"
+    .\winutil-cli.ps1 -Action optimize -Preset ssh -Undo
 #>
 
 [CmdletBinding()]
@@ -56,7 +57,7 @@ param(
     # Exporter: CLI subaction (install / status / start / stop / metrics / firewall)
     [string]$SubAction,
 
-    # Tweaks: reverts tweaks to their original values
+    # Tweaks/Optimize: reverts to original state
     [switch]$Undo,
 
     # Optimize: comma-separated list of process names to stop
@@ -231,7 +232,12 @@ function Show-Menu {
         '11' {
             $p = Read-Host "Preset (ssh / Enter to skip)"
             $k = Read-Host "Kill list (comma-separated, Enter to skip)"
-            Invoke-Optimize -Preset $p -Kill $k
+            $undoResp = Read-Host "Undo? (y/n, Enter = n)"
+            if ($undoResp -eq 'y') {
+                Invoke-Optimize -Preset $p -Kill $k -Undo
+            } else {
+                Invoke-Optimize -Preset $p -Kill $k
+            }
         }
         '0' { return }
         default { Write-Status WARNING "Invalid option." }
@@ -253,7 +259,7 @@ if ($Action) {
         'network'     { Invoke-Network -Interface $Interface -Duration $Duration }
         'exporter'    { Invoke-Exporter -SubAction $SubAction }
         'processes'   { Invoke-Processes }
-        'optimize'    { Invoke-Optimize -Preset $Preset -Kill $Kill }
+        'optimize'    { Invoke-Optimize -Preset $Preset -Kill $Kill -Undo:$Undo }
         default       { Write-Status ERROR "Unknown action: $Action" }
     }
 } else {

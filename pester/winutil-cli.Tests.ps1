@@ -188,13 +188,17 @@ Describe "Execution with Mock" {
     }
 
     Context "-Action optimize" {
-        It "-Preset ssh calls Stop-Service for service-backed and Stop-Process for process-only" {
+        It "-Preset ssh calls Set-Service Disabled and Stop-Service for service-backed, Stop-Process for process-only" {
             Mock Get-Process { [PSCustomObject]@{ Name = 'mock' } }
-            Mock Get-Service { [PSCustomObject]@{ Name = 'mock'; Status = 'Running' } }
-            Mock Stop-Process { }
+            Mock Get-Service { [PSCustomObject]@{ Name = 'mock'; Status = 'Running'; StartType = 'Automatic' } }
+            Mock Set-Service { }
             Mock Stop-Service { }
+            Mock Stop-Process { }
+            Mock Test-Path { $true }
+            Mock Set-Content { }
             Invoke-Optimize -Preset 'ssh'
             # 3 service-backed: SearchHost, TextInputHost, OfficeClickToRun
+            Should -Invoke -CommandName Set-Service  -Times 3
             Should -Invoke -CommandName Stop-Service -Times 3
             # 5 process-only: LogonUI, StartMenuExperienceHost, ShellExperienceHost, ShellHost, msedgewebview2
             Should -Invoke -CommandName Stop-Process -Times 5
@@ -209,9 +213,12 @@ Describe "Execution with Mock" {
 
         It "-Preset ssh combined with -Kill stops preset + custom processes" {
             Mock Get-Process { [PSCustomObject]@{ Name = 'mock' } }
-            Mock Get-Service { [PSCustomObject]@{ Name = 'mock'; Status = 'Running' } }
-            Mock Stop-Process { }
+            Mock Get-Service { [PSCustomObject]@{ Name = 'mock'; Status = 'Running'; StartType = 'Automatic' } }
+            Mock Set-Service { }
             Mock Stop-Service { }
+            Mock Stop-Process { }
+            Mock Test-Path { $true }
+            Mock Set-Content { }
             Invoke-Optimize -Preset 'ssh' -Kill 'notepad'
             Should -Invoke -CommandName Stop-Service -Times 3
             # 5 process-only from preset + 1 custom kill
@@ -229,8 +236,28 @@ Describe "Execution with Mock" {
         It "-Preset ssh does not throw" {
             Mock Get-Process { $null }
             Mock Get-Service { $null }
+            Mock Set-Service { }
             Mock Stop-Process { }
+            Mock Stop-Service { }
             { Invoke-Optimize -Preset 'ssh' } | Should -Not -Throw
+        }
+
+        It "-Undo restores services from state file and deletes it" {
+            Mock Test-Path { $true } -ParameterFilter { $Path -eq 'C:\WinUtil\optimize-state.json' }
+            Mock Get-Content { '{"WSearch":"Automatic","ClickToRunSvc":"Automatic"}' }
+            Mock Set-Service  { }
+            Mock Start-Service { }
+            Mock Remove-Item { }
+            Invoke-Optimize -Undo
+            Should -Invoke -CommandName Set-Service   -Times 2
+            Should -Invoke -CommandName Start-Service -Times 2
+            Should -Invoke -CommandName Remove-Item   -Times 1
+        }
+
+        It "-Undo with missing state file emits [ ERROR ]" {
+            Mock Test-Path { $false } -ParameterFilter { $Path -eq 'C:\WinUtil\optimize-state.json' }
+            $output = (Invoke-Optimize -Undo) 6>&1 | Out-String
+            $output | Should -Match '\[ ERROR \]'
         }
     }
 }

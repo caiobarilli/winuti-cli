@@ -1,8 +1,12 @@
 function Invoke-Optimize {
     param(
         [string]$Preset,
-        [string]$Kill
+        [string]$Kill,
+        [switch]$Undo
     )
+
+    $stateFile = 'C:\WinUtil\optimize-state.json'
+    $stateDir  = 'C:\WinUtil'
 
     $sshProcesses = @(
         'LogonUI', 'SearchHost', 'StartMenuExperienceHost',
@@ -10,7 +14,7 @@ function Invoke-Optimize {
         'msedgewebview2', 'OfficeClickToRun'
     )
 
-    # Service-backed processes: stopping the service keeps them down for the session.
+    # Service-backed processes: disable before stopping to prevent SCM auto-restart.
     # Entries absent from this map fall back to Stop-Process.
     $serviceMap = @{
         'SearchHost'       = 'WSearch'
@@ -18,6 +22,27 @@ function Invoke-Optimize {
         'OfficeClickToRun' = 'ClickToRunSvc'
     }
 
+    # ── UNDO ─────────────────────────────────────────────────────────────────
+    if ($Undo) {
+        if (-not (Test-Path $stateFile)) {
+            Write-Status ERROR "State file not found: $stateFile. Nothing to undo."
+            return
+        }
+        $raw   = Get-Content -Path $stateFile -Raw
+        $state = $raw | ConvertFrom-Json
+        foreach ($prop in $state.PSObject.Properties) {
+            $svcName  = $prop.Name
+            $origType = $prop.Value
+            Set-Service  -Name $svcName -StartupType $origType -ErrorAction SilentlyContinue
+            Start-Service -Name $svcName -ErrorAction SilentlyContinue
+            Write-Status OK "Restored: $svcName"
+        }
+        Remove-Item -Path $stateFile -Force -ErrorAction SilentlyContinue
+        Write-Status OK "Optimize undo complete."
+        return
+    }
+
+    # ── APPLY ─────────────────────────────────────────────────────────────────
     $targets = [System.Collections.Generic.List[string]]::new()
 
     if ($Preset) {
@@ -46,7 +71,8 @@ function Invoke-Optimize {
         return
     }
 
-    $unique = $targets | Select-Object -Unique
+    $unique     = $targets | Select-Object -Unique
+    $savedState = @{}
 
     foreach ($proc in $unique) {
         $svcName = $serviceMap[$proc]
@@ -54,8 +80,10 @@ function Invoke-Optimize {
         if ($svcName) {
             $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
             if ($svc -and $svc.Status -eq 'Running') {
+                $savedState[$svcName] = $svc.StartType.ToString()
+                Set-Service  -Name $svcName -StartupType Disabled -ErrorAction SilentlyContinue
                 Stop-Service -Name $svcName -Force -ErrorAction SilentlyContinue
-                Write-Status OK "Stopped: $proc"
+                Write-Status OK "Disabled: $proc"
             } else {
                 Write-Status WARNING "Not running: $proc"
             }
@@ -68,6 +96,13 @@ function Invoke-Optimize {
                 Write-Status WARNING "Not running: $proc"
             }
         }
+    }
+
+    if ($savedState.Count -gt 0) {
+        if (-not (Test-Path $stateDir)) {
+            New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
+        }
+        $savedState | ConvertTo-Json | Set-Content -Path $stateFile -Encoding UTF8
     }
 
     Write-Status OK "Optimize complete."
