@@ -188,11 +188,16 @@ Describe "Execution with Mock" {
     }
 
     Context "-Action optimize" {
-        It "-Preset ssh calls Stop-Process for each of the 8 preset processes" {
+        It "-Preset ssh calls Stop-Service for service-backed and Stop-Process for process-only" {
             Mock Get-Process { [PSCustomObject]@{ Name = 'mock' } }
+            Mock Get-Service { [PSCustomObject]@{ Name = 'mock'; Status = 'Running' } }
             Mock Stop-Process { }
+            Mock Stop-Service { }
             Invoke-Optimize -Preset 'ssh'
-            Should -Invoke -CommandName Stop-Process -Times 8
+            # 3 service-backed: SearchHost, TextInputHost, OfficeClickToRun
+            Should -Invoke -CommandName Stop-Service -Times 3
+            # 5 process-only: LogonUI, StartMenuExperienceHost, ShellExperienceHost, ShellHost, msedgewebview2
+            Should -Invoke -CommandName Stop-Process -Times 5
         }
 
         It "-Kill stops each process in the comma-separated list" {
@@ -204,9 +209,13 @@ Describe "Execution with Mock" {
 
         It "-Preset ssh combined with -Kill stops preset + custom processes" {
             Mock Get-Process { [PSCustomObject]@{ Name = 'mock' } }
+            Mock Get-Service { [PSCustomObject]@{ Name = 'mock'; Status = 'Running' } }
             Mock Stop-Process { }
+            Mock Stop-Service { }
             Invoke-Optimize -Preset 'ssh' -Kill 'notepad'
-            Should -Invoke -CommandName Stop-Process -Times 9
+            Should -Invoke -CommandName Stop-Service -Times 3
+            # 5 process-only from preset + 1 custom kill
+            Should -Invoke -CommandName Stop-Process -Times 6
         }
 
         It "not-running process emits [ WARNING ] instead of [ OK ]" {
@@ -219,6 +228,7 @@ Describe "Execution with Mock" {
 
         It "-Preset ssh does not throw" {
             Mock Get-Process { $null }
+            Mock Get-Service { $null }
             Mock Stop-Process { }
             { Invoke-Optimize -Preset 'ssh' } | Should -Not -Throw
         }

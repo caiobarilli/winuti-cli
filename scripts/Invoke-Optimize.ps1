@@ -10,6 +10,14 @@ function Invoke-Optimize {
         'msedgewebview2', 'OfficeClickToRun'
     )
 
+    # Service-backed processes: stopping the service keeps them down for the session.
+    # Entries absent from this map fall back to Stop-Process.
+    $serviceMap = @{
+        'SearchHost'       = 'WSearch'
+        'TextInputHost'    = 'TextInputManagementService'
+        'OfficeClickToRun' = 'ClickToRunSvc'
+    }
+
     $targets = [System.Collections.Generic.List[string]]::new()
 
     if ($Preset) {
@@ -41,12 +49,24 @@ function Invoke-Optimize {
     $unique = $targets | Select-Object -Unique
 
     foreach ($proc in $unique) {
-        $running = Get-Process -Name $proc -ErrorAction SilentlyContinue
-        if ($running) {
-            Stop-Process -Name $proc -Force -ErrorAction SilentlyContinue
-            Write-Status OK "Stopped: $proc"
+        $svcName = $serviceMap[$proc]
+
+        if ($svcName) {
+            $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
+            if ($svc -and $svc.Status -eq 'Running') {
+                Stop-Service -Name $svcName -Force -ErrorAction SilentlyContinue
+                Write-Status OK "Stopped: $proc"
+            } else {
+                Write-Status WARNING "Not running: $proc"
+            }
         } else {
-            Write-Status WARNING "Not running: $proc"
+            $running = Get-Process -Name $proc -ErrorAction SilentlyContinue
+            if ($running) {
+                Stop-Process -Name $proc -Force -ErrorAction SilentlyContinue
+                Write-Status OK "Stopped: $proc"
+            } else {
+                Write-Status WARNING "Not running: $proc"
+            }
         }
     }
 
