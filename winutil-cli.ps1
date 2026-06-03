@@ -30,11 +30,17 @@
     .\winutil-cli.ps1 -Action optimize -Kill "notepad,calc"
     .\winutil-cli.ps1 -Action optimize -Preset ssh -Kill "notepad,calc"
     .\winutil-cli.ps1 -Action optimize -Preset ssh -Undo
+    .\winutil-cli.ps1 -Action gpu -SubAction install
+    .\winutil-cli.ps1 -Action gpu -SubAction status
+    .\winutil-cli.ps1 -Action gpu -SubAction start
+    .\winutil-cli.ps1 -Action gpu -SubAction stop
+    .\winutil-cli.ps1 -Action gpu -SubAction metrics
+    .\winutil-cli.ps1 -Action gpu -SubAction uninstall
 #>
 
 [CmdletBinding()]
 param(
-    [ValidateSet('audit', 'tweaks', 'debloat', 'dns', 'performance', 'install', 'memory', 'network', 'exporter', 'processes', 'optimize')]
+    [ValidateSet('audit', 'tweaks', 'debloat', 'dns', 'performance', 'install', 'memory', 'network', 'exporter', 'processes', 'optimize', 'gpu')]
     [string]$Action,
 
     [ValidateSet('standard', 'minimal', 'advanced', 'ssh', 'kill-rdp')]
@@ -180,6 +186,7 @@ function Show-Menu {
     Write-Host "[9] Exporter    - Install/manage windows_exporter (Prometheus)"
     Write-Host "[10] Processes  - Show top 30 processes by RAM"
     Write-Host "[11] Optimize   - Stop processes (preset: ssh, or custom kill list)"
+    Write-Host "[12] GPU        - Install/manage nvidia_gpu_exporter (Prometheus)"
     Write-Host "[0] Exit"
     Write-Host ""
 
@@ -242,6 +249,7 @@ function Show-Menu {
                 Invoke-Optimize -Preset $p -Kill $k
             }
         }
+        '12' { Invoke-GPU }
         '0' { return }
         default { Write-Status WARNING "Invalid option." }
     }
@@ -263,6 +271,7 @@ if ($Action) {
         'exporter'    { Invoke-Exporter -SubAction $SubAction }
         'processes'   { Invoke-Processes }
         'optimize'    { Invoke-Optimize -Preset $Preset -Kill $Kill -Undo:$Undo -KeepUser $KeepUser }
+        'gpu'         { Invoke-GPU -SubAction $SubAction }
         default       { Write-Status ERROR "Unknown action: $Action" }
     }
 } else {
