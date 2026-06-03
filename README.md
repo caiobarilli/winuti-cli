@@ -143,18 +143,20 @@ winutil -Action processes
 
 ### Optimize
 ```powershell
-winutil -Action optimize -Preset ssh           # stop GUI processes and disable unnecessary services
-winutil -Action optimize -Preset ssh -Undo     # restore original service startup types
-winutil -Action optimize -Kill "proc1,proc2"   # stop a custom list of processes
+winutil -Action optimize -Preset ssh                       # stop GUI processes for headless/SSH sessions
+winutil -Action optimize -Preset ssh -Undo                 # restore original service startup types
+winutil -Action optimize -Preset kill-rdp                  # clean up after an RDP session is terminated
+winutil -Action optimize -Preset kill-rdp -Undo            # restore services disabled by kill-rdp
+winutil -Action optimize -Kill "proc1,proc2"               # stop a custom list of processes
 winutil -Action optimize -Preset ssh -Kill "notepad,calc"  # preset + custom kill list
 ```
 
-> **Note:** The `ssh` preset is designed for headless/SSH-only sessions.
-> It stops GUI-related processes and disables their backing services so they don't restart automatically.
+> **Note:** Both presets disable backing services so processes don't restart automatically.
 > State is saved to `C:\WinUtil\optimize-state.json` and fully restored with `-Undo`.
-> For best results, disconnect any active RDP session before running — GUI processes are tied to the graphical session and will restart while it remains open.
 
-#### ssh preset — what gets stopped
+#### ssh preset — for headless/SSH-only sessions
+
+Designed for machines that never had an active graphical session. Run once after boot.
 
 | Process | Method | Notes |
 |---|---|---|
@@ -166,6 +168,33 @@ winutil -Action optimize -Preset ssh -Kill "notepad,calc"  # preset + custom kil
 | `TextInputHost` | Stop-Service (TextInputManagementService) | Disabled until -Undo |
 | `msedgewebview2` | Stop-Process | No backing service |
 | `OfficeClickToRun` | Stop-Service (ClickToRunSvc) | Disabled until -Undo |
+
+#### kill-rdp preset — for after an RDP session is terminated
+
+Designed to clean up what a graphical session leaves behind. Run after fully terminating the RDP session.
+
+> **Important:** Closing the RDP window only disconnects the session — it stays alive in memory.
+> Always terminate it first, then run the preset:
+> ```powershell
+> query session          # find the session ID
+> logoff <ID>            # terminate it
+> winutil -Action optimize -Preset kill-rdp
+> ```
+
+| Process | Method | Notes |
+|---|---|---|
+| `explorer` | Stop-Process | No backing service |
+| `SearchHost` | Stop-Service (WSearch) | Disabled until -Undo |
+| `StartMenuExperienceHost` | Stop-Process | No backing service |
+| `ShellExperienceHost` | Stop-Process | No backing service |
+| `ShellHost` | Stop-Process | No backing service |
+| `TextInputHost` | Stop-Service (TextInputManagementService) | Disabled until -Undo |
+| `msedgewebview2` | Stop-Process | No backing service |
+| `dwm` | Stop-Process | No backing service |
+| `sihost` | Stop-Process | No backing service |
+| `RuntimeBroker` | Stop-Process | No backing service |
+| `backgroundTaskHost` | Stop-Process | No backing service |
+| `CrossDeviceResume` | Stop-Process | No backing service |
 
 ### Logs — quick read
 ```powershell
@@ -266,8 +295,8 @@ winutil-cli/
 - `audit/audit.ps1` — full system audit in 8 blocks
 - `tools/WinMemoryCleaner.exe` — downloaded automatically on first run
 - `scripts/Invoke-Processes.ps1` — lists top 30 processes by RAM usage directly in the terminal
-- `scripts/Invoke-Optimize.ps1` — stops GUI processes and disables services for headless/SSH sessions
-- `pester/winutil-cli.Tests.ps1` — 26 Pester 5+ tests for the entry point
+- `scripts/Invoke-Optimize.ps1` — stops GUI processes and disables services for headless/SSH and post-RDP sessions
+- `pester/winutil-cli.Tests.ps1` — 28 Pester 5+ tests for the entry point
 
 ---
 
@@ -313,6 +342,7 @@ Invoke-Pester .\pester\ -Output Detailed
 | tweaks -Undo | ✅ | Reverts tweaks to original values |
 | processes | ✅ | Top 30 processes by RAM displayed in terminal |
 | optimize ssh | ✅ | Stops GUI processes, disables backing services |
+| optimize kill-rdp | ✅ | Cleans up after RDP session is terminated |
 | optimize -Undo | ✅ | Restores original StartupType and restarts services |
 | optimize -Kill | ✅ | Custom comma-separated process kill list |
 
@@ -327,7 +357,7 @@ Invoke-Pester .\pester\ -Output Detailed
 - [x] Tweaks Standard and Advanced tested
 - [x] Performance — GUID detected dynamically
 - [x] Debloat — 22 APPX packages defined
-- [x] Pester 26/26 tests passing
+- [x] Pester 28/28 tests passing
 - [x] Install tested via winget
 - [x] Network — TShark capture with report
 - [x] Exporter — windows_exporter for Prometheus via Start-Process
@@ -336,6 +366,7 @@ Invoke-Pester .\pester\ -Output Detailed
 - [x] Entry point segmented into `scripts/Invoke-*.ps1`
 - [x] Processes — top 30 processes by RAM displayed in terminal
 - [x] Optimize — SSH preset with service disable + `-Undo` restore + custom `-Kill`
+- [x] Optimize — `kill-rdp` preset for post-RDP session cleanup
 
 ---
 
