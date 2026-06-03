@@ -168,4 +168,12 @@ Describe "Execution with Mock" {
                 -ParameterFilter { $DNSProvider -eq 'cloudflare' }
         }
     }
+
+    Context "-Action processes" {
+        It "Invoke-Processes returns 30 lines of process output" {
+            $output = Invoke-Processes 6>&1 | Out-String
+            $lines = ($output -split "`n") | Where-Object { $_ -match '\S' }
+            $lines.Count | Should -BeGreaterOrEqual 30
+        }
+    }
 }

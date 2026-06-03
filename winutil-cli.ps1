@@ -30,7 +30,7 @@
 
 [CmdletBinding()]
 param(
-    [ValidateSet('audit', 'tweaks', 'debloat', 'dns', 'performance', 'install', 'memory', 'network', 'exporter')]
+    [ValidateSet('audit', 'tweaks', 'debloat', 'dns', 'performance', 'install', 'memory', 'network', 'exporter', 'processes')]
     [string]$Action,
 
     [ValidateSet('standard', 'minimal', 'advanced')]
@@ -168,6 +168,7 @@ function Show-Menu {
     Write-Host "[7] Memory      - Clean RAM memory"
     Write-Host "[8] Network     - Packet capture with TShark"
     Write-Host "[9] Exporter    - Install/manage windows_exporter (Prometheus)"
+    Write-Host "[10] Processes  - Show top 30 processes by RAM"
     Write-Host "[0] Exit"
     Write-Host ""
 
@@ -219,6 +220,7 @@ function Show-Menu {
             Invoke-Network -Interface $iface -Duration $d
         }
         '9' { Invoke-Exporter }
+        '10' { Invoke-Processes }
         '0' { return }
         default { Write-Status WARNING "Invalid option." }
     }
@@ -238,6 +240,7 @@ if ($Action) {
         'memory'      { Invoke-Memory }
         'network'     { Invoke-Network -Interface $Interface -Duration $Duration }
         'exporter'    { Invoke-Exporter -SubAction $SubAction }
+        'processes'   { Invoke-Processes }
         default       { Write-Status ERROR "Unknown action: $Action" }
     }
 } else {
